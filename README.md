@@ -45,6 +45,8 @@ Drag the box, or use **Side / Front / Top**. From the side you read the flow. Fr
 - **Width is scope.** The walls are the owner's own agent session.
 - **The line is the agent's recorded journey**, plotted from the stored trail.
 
+Drag to look from any side, or use **Side / Front / Top**: the side shows money against time, the top shows scope, and the front looks down the corridor at everything the owner allowed.
+
 Where the line leaves the corridor is where the purchase left the mandate. The lights are the investigators: they roam while reading evidence, park on the record they cite, and face each other when one challenges another.
 
 **Things to try**

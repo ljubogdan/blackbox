@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { connect, useStore } from './store';
-import { CaseInfo, Inspector, Investigators, Verdict } from './ui/CasePanels';
+import { CaseInfo, Inspector, Investigators, ReplayLens, Verdict } from './ui/CasePanels';
 import { Engine } from './ui/Engine';
 import { LivePanels } from './ui/LivePanels';
 import { Builder } from './ui/Builder';
@@ -35,10 +35,7 @@ export function App() {
             <CaseScene c={c!} />
             <CaseInfo c={c!} />
             <Inspector c={c!} />
-            <div className="readme3d">
-              Height is money: the ceiling is the owner's limit. Width is scope: the walls are the owner's own agent session. The line is
-              the agent's recorded journey.
-            </div>
+            <ReplayLens />
           </div>
           <section className="dock">
             <Investigators c={c!} />

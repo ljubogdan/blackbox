@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { CaseFile, Role, TrailStep } from '../../../shared/types';
 import { ROLE_NAME, ROLES } from '../../../shared/types';
-import { BG, BREACH, eur, INK, MINT, PARTY_COLOR, ROLE_COLOR, useStore } from '../store';
+import { BG, BREACH, eur, INK, MINT, PARTY_COLOR, ROLE_COLOR, useStore, type Lens } from '../store';
 import { Label, LabelLayer, Projector, useAnchor } from './labels';
 
 // The replay. The owner's instruction is a corridor:
@@ -722,9 +722,23 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
 }
 
 const TARGET = new THREE.Vector3(-0.1, 0.7, 0);
-const VIEW_DIR = new THREE.Vector3(0.16, 0.2, 1).normalize();
 const SCENE_W = 12.4; // corridor plus the probe dock on the left and the dispute node on the right
 const SCENE_H = 5.9; // floor to the top of the overspend scale
+
+// Where the camera stands for each reading of the corridor.
+const VIEW: Record<Lens, THREE.Vector3> = {
+  flow: new THREE.Vector3(0.16, 0.2, 1).normalize(), // from the side: money against time
+  agents: new THREE.Vector3(-0.95, 0.2, 0.26).normalize(), // down the corridor: money against scope
+  liability: new THREE.Vector3(0, 0.985, 0.17).normalize(), // from above: scope against time
+};
+
+// Looking down the corridor puts its near end close to the camera, so that view stands further back.
+const STAND_BACK: Record<Lens, number> = { flow: 1, agents: 1.38, liability: 1.05 };
+
+function lensOf(dir: THREE.Vector3): Lens {
+  if (Math.abs(dir.y) > 0.8) return 'liability';
+  return Math.abs(dir.x) > Math.abs(dir.z) ? 'agents' : 'flow';
+}
 
 // Side panels overlay the canvas; these are the widths they cover (see theme.css).
 export const overlays = (width: number) => ({ left: 316, right: width >= 1300 ? 300 : 0 });
@@ -733,14 +747,21 @@ const INTRO_MS = 3800;
 
 // The camera starts close on the first step and pulls back as the journey is
 // drawn, ending where the whole replay fits the part of the canvas the panels
-// leave free. After that it drifts slightly until the user takes hold of it.
+// leave free. After that it turns to a side when asked, and drifts slightly
+// until the user takes hold of it. They can look from any side.
 function Director({ layout }: { layout: Layout }) {
   const { camera, size } = useThree();
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; enabled: boolean; addEventListener: (e: string, f: () => void) => void; removeEventListener: (e: string, f: () => void) => void } | null;
+  const go = useStore((s) => s.replayGo);
+  const distance = useRef(14);
   const fit = useMemo(() => new THREE.Vector3(), []);
   const from = useMemo(() => new THREE.Vector3(), []);
   const fromTarget = useMemo(() => new THREE.Vector3(), []);
   const offset = useMemo(() => new THREE.Vector3(), []);
+  const dir = useMemo(() => VIEW.flow.clone(), []);
+  const goal = useRef<THREE.Vector3 | null>(VIEW.flow);
+  const back = useRef(1);
+  const backGoal = useRef(1);
   const started = useRef(performance.now());
   const taken = useRef(false);
 
@@ -749,8 +770,8 @@ function Director({ layout }: { layout: Layout }) {
     const { left, right } = overlays(size.width);
     const free = Math.max(360, size.width - left - right);
     const half = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
-    const distance = Math.max(SCENE_W / 2 / (half * (free / size.height)), SCENE_H / 2 / half);
-    fit.copy(TARGET).addScaledVector(VIEW_DIR, distance);
+    distance.current = Math.max(SCENE_W / 2 / (half * (free / size.height)), SCENE_H / 2 / half);
+    fit.copy(TARGET).addScaledVector(VIEW.flow, distance.current);
     cam.setViewOffset(size.width, size.height, -(left - right) / 2, 0, size.width, size.height);
     cam.updateProjectionMatrix();
     const first = layout.nodes[0].pos;
@@ -759,29 +780,45 @@ function Director({ layout }: { layout: Layout }) {
   }, [camera, size.width, size.height, fit, from, fromTarget, layout]);
 
   useEffect(() => {
+    if (!go) return;
+    goal.current = VIEW[go.to];
+    backGoal.current = STAND_BACK[go.to];
+    taken.current = false;
+    started.current = Math.min(started.current, performance.now() - INTRO_MS); // a request ends the opening shot
+  }, [go]);
+
+  useEffect(() => {
     if (!controls) return;
-    const take = () => (taken.current = true);
+    const take = () => {
+      taken.current = true;
+      goal.current = null;
+    };
     controls.addEventListener('start', take);
     return () => controls.removeEventListener('start', take);
   }, [controls]);
 
-  useFrame(({ clock }) => {
-    if (taken.current) return;
+  useFrame(({ clock }, dt) => {
     const t = Math.min(1, (performance.now() - started.current) / INTRO_MS);
-    const k = t * t * (3 - 2 * t);
     // Orbit limits would fight the close opening shot, so the controls wait until it is over.
     if (controls) controls.enabled = t >= 1;
     if (t < 1) {
+      const k = t * t * (3 - 2 * t);
       camera.position.lerpVectors(from, fit, k);
       controls?.target.lerpVectors(fromTarget, TARGET, k);
-    } else {
-      // idle: swing a few degrees either way around the middle of the corridor
-      const angle = Math.sin(clock.elapsedTime * 0.22) * 0.075;
-      offset.copy(fit).sub(TARGET).applyAxisAngle(THREE.Object3D.DEFAULT_UP, angle);
-      camera.position.copy(TARGET).add(offset);
+      camera.lookAt(controls?.target ?? TARGET);
+    } else if (!taken.current && goal.current) {
+      dir.lerp(goal.current, 1 - Math.exp(-dt * 3.2)).normalize();
+      back.current += (backGoal.current - back.current) * (1 - Math.exp(-dt * 3.2));
+      // idle: swing a few degrees either way
+      offset.copy(dir).applyAxisAngle(THREE.Object3D.DEFAULT_UP, Math.sin(clock.elapsedTime * 0.22) * 0.07);
+      camera.position.copy(TARGET).addScaledVector(offset, distance.current * back.current);
       controls?.target.copy(TARGET);
+      camera.lookAt(TARGET);
+    } else {
+      dir.copy(camera.position).sub(controls?.target ?? TARGET).normalize();
     }
-    camera.lookAt(controls?.target ?? TARGET);
+    const lens = t < 1 ? 'flow' : lensOf(dir);
+    if (lens !== useStore.getState().replayLens) useStore.getState().set({ replayLens: lens });
   });
   return null;
 }
@@ -803,11 +840,9 @@ export function CaseScene({ c }: { c: CaseFile }) {
           enablePan={false}
           target={[-0.1, 0.7, 0]}
           minDistance={6}
-          maxDistance={34}
-          minPolarAngle={0.75}
+          maxDistance={40}
+          minPolarAngle={0.05}
           maxPolarAngle={1.62}
-          minAzimuthAngle={-0.95}
-          maxAzimuthAngle={0.95}
           enableDamping
           dampingFactor={0.08}
           rotateSpeed={0.5}

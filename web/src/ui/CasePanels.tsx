@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { CaseFile, CitationCheck, EvidenceRecord, Role } from '../../../shared/types';
 import { PARTIES, PARTY_NAME, ROLE_NAME, ROLE_PARTY, ROLES } from '../../../shared/types';
 import { downloadPack } from '../pack';
-import { eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore } from '../store';
+import { eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore, type Lens } from '../store';
 import { CaseState } from './State';
 
 const QUESTION: Record<Role, string> = {
@@ -403,6 +403,31 @@ export function Investigators({ c }: { c: CaseFile }) {
       {ROLES.map((r) => (
         <InvestigatorCard key={r} c={c} role={r} />
       ))}
+    </div>
+  );
+}
+
+// The corridor reads differently from each side.
+const LENSES: { id: Lens; name: string; text: string }[] = [
+  { id: 'flow', name: 'Side', text: "Height is money: the ceiling is the owner's limit. The line is the agent's recorded journey, left to right." },
+  { id: 'agents', name: 'Front', text: 'Looking down the corridor. The frame is everything the owner allowed; anything outside it is outside the mandate.' },
+  { id: 'liability', name: 'Top', text: "Width is scope: the walls are the owner's own agent session. A line that crosses a wall was not the owner's agent." },
+];
+
+export function ReplayLens() {
+  const lens = useStore((s) => s.replayLens);
+  const set = useStore((s) => s.set);
+  return (
+    <div className="replay-lens">
+      <div className="seg" role="tablist" aria-label="Which side of the corridor to look at">
+        {LENSES.map((l) => (
+          <button key={l.id} role="tab" aria-selected={lens === l.id} className={lens === l.id ? 'on' : ''} onClick={() => set({ replayGo: { to: l.id, n: Date.now() } })}>
+            {l.name}
+          </button>
+        ))}
+        <span>or drag to rotate, scroll to zoom</span>
+      </div>
+      <p>{LENSES.find((l) => l.id === lens)!.text}</p>
     </div>
   );
 }

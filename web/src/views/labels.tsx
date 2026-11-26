@@ -68,8 +68,30 @@ export function LabelLayer({ children }: { children: ReactNode }) {
     tick();
     return () => cancelAnimationFrame(raf);
   }, []);
+  // A label sits on top of the canvas, so a drag that starts on one would not
+  // rotate the scene. Once the pointer has moved a little, hand the gesture to
+  // the canvas; a press without movement stays a click on the label.
+  const onPointerDown = (down: React.PointerEvent) => {
+    const { pointerId, pointerType, clientX, clientY, button } = down;
+    if (button !== 0) return;
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+    };
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId || Math.hypot(e.clientX - clientX, e.clientY - clientY) < 4) return;
+      stop();
+      const canvas = ref.current?.parentElement?.querySelector('canvas');
+      canvas?.dispatchEvent(new PointerEvent('pointerdown', { pointerId, pointerType, clientX, clientY, button: 0, buttons: 1, isPrimary: true, bubbles: true }));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+  };
+
   return (
-    <div className="labels" ref={ref}>
+    <div className="labels" ref={ref} onPointerDown={onPointerDown}>
       {children}
     </div>
   );
