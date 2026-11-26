@@ -33,6 +33,14 @@ export function setAnchor(id: string, fn: AnchorFn | null) {
   }
 }
 
+// Where an anchor is right now, whether or not its label is showing.
+export function locate(id: string, out: THREE.Vector3): boolean {
+  const fn = registry.get(id);
+  if (!fn) return false;
+  fn(out);
+  return true;
+}
+
 // Goes inside the <Canvas>.
 export function Projector() {
   const { camera, size } = useThree();

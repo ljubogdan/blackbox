@@ -47,6 +47,7 @@ interface Store {
   hover: string | null; // the filed case under the pointer
   replayLens: Lens; // the same, for the replay of one case
   replayGo: { to: Lens; n: number } | null;
+  entering: { caseId: string; at: number } | null; // the camera is diving into the box towards this case
   limitPreview: number | null; // the limit being tried on the what-if slider
   pageMode: 'human' | 'agent';
   awaiting: string | null; // nonce of a case we asked for and want to open when it exists
@@ -83,6 +84,7 @@ export const useStore = create<Store>((set, get) => ({
   hover: null,
   replayLens: 'flow',
   replayGo: null,
+  entering: null,
   limitPreview: null,
   pageMode: 'human',
   awaiting: null,
@@ -93,8 +95,15 @@ export const useStore = create<Store>((set, get) => ({
     get().send(msg);
   },
   set: (patch) => set(patch),
-  open: (caseId) => set({ view: 'case', selected: caseId, inspect: null, limitPreview: null, pageMode: 'human', replayLens: 'flow', replayGo: null }),
-  back: () => set({ view: 'live', inspect: null, limitPreview: null }),
+  open: (caseId) => {
+    const arrive = () => set({ view: 'case', selected: caseId, inspect: null, limitPreview: null, pageMode: 'human', replayLens: 'flow', replayGo: null, entering: null, hover: null });
+    // From the live view, the camera dives into the box first; the replay is what is inside it.
+    if (get().view !== 'live') return arrive();
+    if (get().entering) return;
+    set({ entering: { caseId, at: performance.now() } });
+    setTimeout(arrive, DIVE_MS);
+  },
+  back: () => set({ view: 'live', inspect: null, limitPreview: null, entering: null }),
   setInspect: (inspect) => set({ inspect }),
   send: (msg) => socket?.readyState === WebSocket.OPEN && socket.send(JSON.stringify(msg)),
   setPaused: (paused) => {
@@ -110,6 +119,8 @@ function cue(before: CaseFile | undefined, after: CaseFile) {
   if (before && !before.closedAt && after.closedAt) play(after.status === 'blocked' ? 'block' : 'verdict');
   if (before && Object.values(after.investigators).some((i) => i.status === 'rejected' && before.investigators[i.role].status !== 'rejected')) play('reject');
 }
+
+export const DIVE_MS = 900;
 
 export const nonce = () => Math.random().toString(36).slice(2, 10);
 

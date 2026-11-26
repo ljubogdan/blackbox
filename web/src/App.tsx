@@ -17,6 +17,7 @@ export function App() {
   const connected = useStore((s) => s.connected);
   const builder = useStore((s) => s.builder);
   const engine = useStore((s) => s.engine);
+  const entering = useStore((s) => !!s.entering);
 
   useEffect(() => connect(), []);
   useEffect(() => {
@@ -27,7 +28,7 @@ export function App() {
 
   const inCase = view === 'case' && !!c;
   return (
-    <div className={`app ${engine ? 'engine-open' : ''}`}>
+    <div className={`app ${engine ? 'engine-open' : ''} ${entering ? 'entering' : ''}`}>
       <TopBar />
       {inCase ? (
         <main className="case-view" key={selected}>

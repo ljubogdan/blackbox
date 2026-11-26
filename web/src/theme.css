@@ -136,9 +136,38 @@ label {
 }
 
 .stage.live {
+  background: var(--bg);
   position: absolute;
   inset: var(--top) 0 var(--bottom) 0;
   animation: fade 0.7s ease both;
+}
+
+/* opening a case: the camera dives into the box and everything else gets out of the way */
+.intro,
+.lens,
+.cases,
+.stage.live .labels {
+  transition: opacity 0.35s ease;
+}
+.app.entering .intro,
+.app.entering .lens,
+.app.entering .cases,
+.app.entering .stage.live .labels {
+  opacity: 0;
+  pointer-events: none;
+}
+.stage.live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease 0.6s;
+  z-index: 4;
+}
+.app.entering .stage.live::after {
+  opacity: 1;
 }
 
 .offline {
@@ -727,6 +756,7 @@ select option {
   animation: fade 0.5s ease both;
 }
 .case-view .stage {
+  background: var(--bg);
   position: relative;
   min-height: 0;
 }

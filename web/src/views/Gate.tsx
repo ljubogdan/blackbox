@@ -6,8 +6,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { CaseFile, Party } from '../../../shared/types';
 import { PARTIES, PARTY_NAME, PROVIDER_NAMES } from '../../../shared/types';
-import { BG, BREACH, caseList, eur, INK, MINT, PARTY_COLOR, topParty, useStore, type Arc, type Lens } from '../store';
-import { Label, LabelLayer, Projector, setAnchor, useAnchor } from './labels';
+import { BG, BREACH, caseList, DIVE_MS, eur, INK, MINT, PARTY_COLOR, topParty, useStore, type Arc, type Lens } from '../store';
+import { Label, LabelLayer, locate, Projector, setAnchor, useAnchor } from './labels';
 
 // The live view: a glass box that every purchase passes through. Its three
 // axes each mean one thing, so each side of the box is a different reading.
@@ -487,7 +487,7 @@ function Box() {
 }
 
 const TARGET = new THREE.Vector3(0.2, 1.3, 0);
-const SCENE_W = 13;
+const SCENE_W = 14;
 const SCENE_H = 6.6; // the box, the title above it and the lane names on the floor
 
 // Where the camera stands for each reading of the box.
@@ -507,8 +507,12 @@ function lensOf(dir: THREE.Vector3): Lens {
 // can take hold of it at any time and look from anywhere above the floor.
 function Rig() {
   const { camera, size } = useThree();
-  const controls = useThree((s) => s.controls) as unknown as { addEventListener: (e: string, f: () => void) => void; removeEventListener: (e: string, f: () => void) => void } | null;
+  const controls = useThree((s) => s.controls) as unknown as { enabled: boolean; addEventListener: (e: string, f: () => void) => void; removeEventListener: (e: string, f: () => void) => void } | null;
   const go = useStore((s) => s.lensGo);
+  const entering = useStore((s) => s.entering);
+  const dive = useRef<{ from: THREE.Vector3; to: THREE.Vector3 } | null>(null);
+  const look = useMemo(() => new THREE.Vector3(), []);
+  const mounted = useRef(performance.now());
   const distance = useRef(12);
   const dir = useMemo(() => VIEW.flow.clone(), []);
   const goal = useRef<THREE.Vector3 | null>(VIEW.flow);
@@ -521,7 +525,8 @@ function Rig() {
     const free = Math.max(360, size.width - right);
     const half = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
     distance.current = Math.max(SCENE_W / 2 / (half * (free / size.height)), SCENE_H / 2 / half, 11);
-    cam.setViewOffset(size.width, size.height, right / 2, -size.height * 0.05, size.width, size.height);
+    // the headline and the view switch sit on the left, so the box stands a little right of centre and above it
+    cam.setViewOffset(size.width, size.height, right / 2 - size.width * 0.05, size.height * 0.035, size.width, size.height);
     cam.updateProjectionMatrix();
   }, [camera, size.width, size.height]);
 
@@ -541,12 +546,35 @@ function Rig() {
     return () => controls.removeEventListener('start', take);
   }, [controls]);
 
+  // Opening a case: find where it is in the box and remember where the camera started.
+  useEffect(() => {
+    if (!entering) {
+      dive.current = null;
+      if (controls) controls.enabled = true;
+      return;
+    }
+    const to = new THREE.Vector3(0, BOX_H / 2, 0);
+    if (!locate(`filed:${entering.caseId}`, to) && !locate(`case:${entering.caseId}`, to)) to.set(0, BOX_H / 2, 0);
+    dive.current = { from: camera.position.clone(), to };
+    if (controls) controls.enabled = false;
+  }, [entering, camera, controls]);
+
   useFrame(({ clock }, dt) => {
+    if (dive.current && entering) {
+      // accelerate into the box, towards the case
+      const k = Math.min(1, (performance.now() - entering.at) / DIVE_MS);
+      const e = k * k * k;
+      camera.position.lerpVectors(dive.current.from, dive.current.to, e * 0.93);
+      camera.lookAt(look.lerpVectors(TARGET, dive.current.to, Math.min(1, k * 2.2)));
+      return;
+    }
     if (!taken.current && goal.current) {
       dir.lerp(goal.current, 1 - Math.exp(-dt * 3.2)).normalize();
+      // arriving: start a little close and settle back
+      const settle = 1 - 0.32 * Math.exp(-(performance.now() - mounted.current) / 420);
       // while nobody is holding it, it sways a little so the depth stays readable
       offset.copy(dir).applyAxisAngle(THREE.Object3D.DEFAULT_UP, Math.sin(clock.elapsedTime * 0.16) * 0.05);
-      camera.position.copy(TARGET).addScaledVector(offset, distance.current);
+      camera.position.copy(TARGET).addScaledVector(offset, distance.current * settle);
       camera.lookAt(TARGET);
     } else {
       dir.copy(camera.position).sub(TARGET).normalize();

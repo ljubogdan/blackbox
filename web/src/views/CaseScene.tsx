@@ -592,14 +592,22 @@ function Replay({ c, layout }: { c: CaseFile; layout: Layout }) {
     }
   }, [c.closedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // On arrival the corridor unfolds from the first step, then the journey is drawn through it.
+  const unfold = useRef<THREE.Group>(null!);
   useFrame(() => {
     const t = Math.min(1, (performance.now() - started.current - 350) / 3400);
     progress.current = t <= 0 ? 0 : 1 - Math.pow(1 - t, 2.2);
+    const u = Math.min(1, (performance.now() - started.current) / 1100);
+    const k = Math.max(0.001, 1 - Math.pow(1 - u, 3));
+    unfold.current.scale.x = k;
+    unfold.current.position.x = X0 * (1 - k);
   });
 
   return (
     <group position={[0, LIFT, 0]}>
-      <Corridor layout={layout} progress={progress} flash={flash} />
+      <group ref={unfold}>
+        <Corridor layout={layout} progress={progress} flash={flash} />
+      </group>
       <Journey layout={layout} progress={progress} />
       {allNodes(layout).map((nd) => (
         <StepNode key={nd.key} node={nd} progress={progress} />
