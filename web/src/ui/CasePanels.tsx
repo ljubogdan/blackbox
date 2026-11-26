@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { CaseFile, CitationCheck, EvidenceRecord, Role } from '../../../shared/types';
 import { PARTIES, PARTY_NAME, ROLE_NAME, ROLE_PARTY, ROLES } from '../../../shared/types';
+import { useEffect, useState } from 'react';
 import { downloadPack } from '../pack';
 import { eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore, type Lens } from '../store';
 import { CaseState } from './State';
@@ -227,8 +228,6 @@ export function Inspector({ c }: { c: CaseFile }) {
 }
 
 export function Verdict({ c }: { c: CaseFile }) {
-  const send = useStore((s) => s.send);
-  const info = useStore((s) => s.info);
   const ruling = c.arbiter.ruling;
   const awaiting = c.status === 'awaiting_approval';
   const active = ROLES.filter((r) => c.investigators[r].status !== 'skipped');
@@ -239,7 +238,7 @@ export function Verdict({ c }: { c: CaseFile }) {
     <section className={`verdict ${c.status}`}>
       <div className="bar-wrap">
         <div className="bar-title">
-          <h3>{hold ? 'Who would have paid' : 'Who pays'}</h3>
+          <h3>{awaiting ? 'Proposed ruling' : hold ? 'Who would have paid' : 'Who pays'}</h3>
           {ruling ? (
             <span className="code mono">{ruling.reason_code}</span>
           ) : (
@@ -252,7 +251,7 @@ export function Verdict({ c }: { c: CaseFile }) {
             </span>
           )}
         </div>
-        <div className={`bar ${ruling ? '' : 'empty'}`}>
+        <div className={`bar ${ruling ? '' : 'empty'} ${awaiting ? 'draft' : ''}`}>
           {ruling
             ? PARTIES.filter((p) => ruling.split[p] > 0).map((p) => (
                 <div key={p} style={{ width: `${ruling.split[p]}%`, background: PARTY_COLOR[p] }}>
@@ -275,23 +274,7 @@ export function Verdict({ c }: { c: CaseFile }) {
         </div>
       )}
 
-      {awaiting && ruling && (
-        <div className="approval">
-          <div>
-            <b>This ruling is waiting for you.</b>
-            <span>
-              Orders of {eur(info?.approvalThreshold ?? 0, 0)} or more need a person. The arbiter is paused mid-turn; every other case keeps
-              moving.
-            </span>
-          </div>
-          <button className="approve" onClick={() => send({ type: 'approve', caseId: c.id, approved: true })}>
-            Approve
-          </button>
-          <button className="reject" onClick={() => send({ type: 'approve', caseId: c.id, approved: false })}>
-            Send to manual review
-          </button>
-        </div>
-      )}
+      {awaiting && <p className="draft-note">A draft. It is not in force until a person approves it.</p>}
 
       {ruling && <p className="rationale">{ruling.rationale}</p>}
 
@@ -428,6 +411,64 @@ export function ReplayLens() {
         <span>or drag to rotate, scroll to zoom</span>
       </div>
       <p>{LENSES.find((l) => l.id === lens)!.text}</p>
+    </div>
+  );
+}
+
+// How long the arbiter has been stopped, from the engine's own log of when it stopped.
+function Waited({ since }: { since: number }) {
+  const skew = useStore((s) => s.skew);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const s = Math.max(0, Math.floor((Date.now() + skew - since) / 1000));
+  return (
+    <>
+      {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
+    </>
+  );
+}
+
+// The moment a person is needed. The arbiter has drafted a ruling on a large
+// order and stopped mid-turn; nothing moves on this case until someone decides.
+export function ApprovalBanner({ c }: { c: CaseFile }) {
+  const send = useStore((s) => s.send);
+  const info = useStore((s) => s.info);
+  const ruling = c.arbiter.ruling;
+  if (c.status !== 'awaiting_approval' || !ruling) return null;
+  const stopped = [...c.log].reverse().find((l) => l.who === 'Arbiter' && l.text.startsWith('ruling held'))?.t ?? c.openedAt;
+  return (
+    <div className="approval-banner" role="alertdialog" aria-label="A ruling is waiting for your approval">
+      <div className="what">
+        <b>
+          <i />
+          The arbiter has stopped. This ruling needs a person.
+        </b>
+        <span>
+          {eur(c.purchase.total)} is at or above the {eur(info?.approvalThreshold ?? 0, 0)} line. Waiting <Waited since={stopped} />. Every other case keeps
+          moving.
+        </span>
+      </div>
+      <div className="proposal" title={ruling.rationale}>
+        <div className="minibar">
+          {PARTIES.filter((p) => ruling.split[p] > 0).map((p) => (
+            <i key={p} style={{ width: `${ruling.split[p]}%`, background: PARTY_COLOR[p] }} />
+          ))}
+        </div>
+        <span>
+          {PARTIES.filter((p) => ruling.split[p] > 0)
+            .map((p) => `${ruling.split[p]}% ${PARTY_NAME[p]}`)
+            .join(' · ')}
+        </span>
+      </div>
+      <button className="btn" onClick={() => send({ type: 'approve', caseId: c.id, approved: false })}>
+        Send to manual review
+      </button>
+      <button className="btn primary" onClick={() => send({ type: 'approve', caseId: c.id, approved: true })}>
+        Approve ruling
+      </button>
     </div>
   );
 }

@@ -24,6 +24,8 @@ export const config = {
   faultRate: live ? 0 : num(env.FAULT_RATE, 0.15),
   // Rulings on orders at or above this amount (EUR) wait for a human.
   approvalThreshold: num(env.APPROVAL_THRESHOLD, 1000),
+  // How many rulings may wait for a person before the stream stops producing more that would need one.
+  maxAwaiting: num(env.MAX_AWAITING, 2),
   premiumBps: num(env.PREMIUM_BPS, 90),
   maxOpenCases: num(env.MAX_OPEN_CASES, live ? 2 : 4),
   maxCases: num(env.MAX_CASES, live ? 12 : Infinity), // bounds model spend in live mode

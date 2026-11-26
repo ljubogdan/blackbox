@@ -116,6 +116,7 @@ export const useStore = create<Store>((set, get) => ({
 function cue(before: CaseFile | undefined, after: CaseFile) {
   if (!useStore.getState().sound) return;
   if (!before && after.stage === 'hold') play('hold');
+  if (before && before.status !== 'awaiting_approval' && after.status === 'awaiting_approval') play('ask');
   if (before && !before.closedAt && after.closedAt) play(after.status === 'blocked' ? 'block' : 'verdict');
   if (before && Object.values(after.investigators).some((i) => i.status === 'rejected' && before.investigators[i.role].status !== 'rejected')) play('reject');
 }
@@ -180,6 +181,13 @@ export const eur = (n: number, digits = 2) =>
 
 export function caseList(cases: Record<string, CaseFile>): CaseFile[] {
   return Object.values(cases).sort((a, b) => b.openedAt - a.openedAt);
+}
+
+// Rulings waiting for a person, the one that has waited longest first.
+export function waitingCases(cases: Record<string, CaseFile>): CaseFile[] {
+  return Object.values(cases)
+    .filter((c) => c.status === 'awaiting_approval' && c.arbiter.ruling)
+    .sort((a, b) => a.openedAt - b.openedAt);
 }
 
 export function topParty(split: Record<Party, number>): Party {

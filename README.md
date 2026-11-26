@@ -52,6 +52,7 @@ Where the line leaves the corridor is where the purchase left the mandate. The l
 **Things to try**
 
 - **Guided tour** walks one case from the box to the verdict in about a minute. It drives the real engine; nothing is pre-recorded.
+- **Approve a ruling.** A ruling on an order of €1,000 or more stops and waits for you. In the box the case waits as an empty ring on a column of light, where it will be filed if you approve; the top bar counts what is waiting and opens the oldest. In the case, the arbiter's sweep stops mid-corridor and the ruling is shown as a draft until you approve it or send it to manual review. Once two rulings are waiting, the stream keeps new disputes to small orders (`MAX_AWAITING`).
 - **Break it yourself** lets you set the errand and the limit, pick a sabotage, and choose whether Blackbox steps in before or after settlement.
 - **What the agent read:** click a "View" step, then switch the page preview from what a person sees to what the agent read. Planted text shows up.
 - **What if the limit were…?** Drag the slider in the case panel and the journey moves in or out of the corridor as you drag. "Re-run" has the team rule on the same records with that limit.

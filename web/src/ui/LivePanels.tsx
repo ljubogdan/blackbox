@@ -66,7 +66,6 @@ export function LivePanels() {
   const cases = useStore((s) => s.cases);
   const stats = useStore((s) => s.stats);
   const list = caseList(cases);
-  const waiting = list.filter((c) => c.status === 'awaiting_approval');
   const [tab, setTab] = useState<'cases' | 'board'>('cases');
   const lens = useStore((s) => s.lens);
   const set = useStore((s) => s.set);
@@ -120,7 +119,6 @@ export function LivePanels() {
               Risk pricing
             </button>
           </div>
-          {waiting.length > 0 && <span className="badge">{waiting.length} need approval</span>}
         </header>
         {tab === 'cases' ? (
           <div className="scroll">

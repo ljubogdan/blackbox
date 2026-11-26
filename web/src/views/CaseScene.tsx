@@ -556,11 +556,20 @@ function Probe({ c, role, index, layout }: { c: CaseFile; role: Role; index: num
 }
 
 // While the arbiter deliberates, a sheet of light sweeps the length of the corridor.
-function ArbiterSweep({ active }: { active: boolean }) {
+// When the ruling needs a person, it stops where it is, drifts to the middle and waits.
+function ArbiterSweep({ mode }: { mode: 'off' | 'sweep' | 'held' }) {
   const mesh = useRef<THREE.Mesh>(null!);
-  useFrame(({ clock }) => {
-    mesh.current.visible = active;
-    if (active) mesh.current.position.x = X0 + (((clock.elapsedTime * 0.45) % 1) * (X1 - X0));
+  useAnchor('arbiter', (out) => (mesh.current?.getWorldPosition(out), (out.y += H / 2 + 0.25), mode === 'held'));
+  useFrame(({ clock }, dt) => {
+    mesh.current.visible = mode !== 'off';
+    const material = mesh.current.material as THREE.MeshBasicMaterial;
+    if (mode === 'sweep') {
+      mesh.current.position.x = X0 + (((clock.elapsedTime * 0.45) % 1) * (X1 - X0));
+      material.opacity = 0.16;
+    } else if (mode === 'held') {
+      mesh.current.position.x += ((X0 + X1) / 2 - mesh.current.position.x) * (1 - Math.exp(-dt * 2.5));
+      material.opacity = 0.2 + Math.sin(clock.elapsedTime * 1.6) * 0.07;
+    }
   });
   return (
     <mesh ref={mesh} position={[X0, H / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
@@ -627,7 +636,7 @@ function Replay({ c, layout }: { c: CaseFile; layout: Layout }) {
       <Breach layout={layout} progress={progress} />
       {ROLES.map((r, i) => c.investigators[r].status !== 'skipped' && <Probe key={r} c={c} role={r} index={i} layout={layout} />)}
       <ChallengeBeam c={c} />
-      <ArbiterSweep active={c.arbiter.status === 'deliberating' || c.arbiter.status === 'awaiting_approval'} />
+      <ArbiterSweep mode={c.arbiter.status === 'awaiting_approval' ? 'held' : c.arbiter.status === 'deliberating' ? 'sweep' : 'off'} />
     </group>
   );
 }
@@ -691,6 +700,11 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
           )
         );
       })}
+      {c.status === 'awaiting_approval' && (
+        <Label anchor="arbiter" className="tag3d paused">
+          Arbiter stopped here
+        </Label>
+      )}
       {/* What the replay itself shows, computed from the records before any agent rules on it. */}
       <div className={`replay-fact ${b ? 'breach' : 'inside'}`}>
         {b?.kind === 'limit' && (

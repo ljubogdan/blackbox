@@ -9,6 +9,7 @@ import { SCENARIOS } from '../shared/types';
 import { assembleTeam } from './agents/team';
 import { config } from './config';
 import { buildCase, buildPurchase, cloneWithLimit, type BuildOptions } from './data/scenarios';
+import { CATALOG } from './data/world';
 import { GuardedRunner } from './model/guard';
 import { ScriptedRunner } from './model/scripted';
 import { Rng } from './rng';
@@ -125,12 +126,21 @@ function whatIf(caseId: string, max: number): string | null {
   return clone.id;
 }
 
+// Items cheap enough that no scenario takes the order to the approval threshold (the worst case is four units, about 4.2x the price).
+const SMALL_ITEMS = CATALOG.map((c, i) => ({ i, price: c.price }))
+  .filter((c) => c.price * 4.4 < config.approvalThreshold)
+  .map((c) => c.i);
+
 function disputeTick() {
   if (paused) return;
   const open = [...state().cases.values()].filter((c) => c.status === 'investigating' || c.status === 'arbitrating').length;
   if (open >= config.maxOpenCases) return;
   const next = nextScenario();
-  openCase(next.sabotage, { stage: next.stage });
+  // A person can only review so much. While enough rulings are waiting for one, the stream keeps
+  // new disputes to small orders, which the arbiter may rule on alone.
+  const waiting = [...state().cases.values()].filter((c) => c.status === 'awaiting_approval').length;
+  const item = next.stage === 'dispute' && waiting >= config.maxAwaiting ? rng.pick(SMALL_ITEMS) : undefined;
+  openCase(next.sabotage, { stage: next.stage, item });
 }
 
 // ───────────────────────── http + websocket ─────────────────────────

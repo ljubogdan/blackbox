@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { CaseFile, Party } from '../../../shared/types';
 import { PARTIES, PARTY_NAME, PROVIDER_NAMES } from '../../../shared/types';
-import { BG, BREACH, caseList, DIVE_MS, eur, INK, MINT, PARTY_COLOR, topParty, useStore, type Arc, type Lens } from '../store';
+import { BG, BREACH, caseList, DIVE_MS, eur, INK, MINT, PARTY_COLOR, topParty, useStore, waitingCases, type Arc, type Lens } from '../store';
 import { Label, LabelLayer, locate, Projector, setAnchor, useAnchor } from './labels';
 
 // The live view: a glass box that every purchase passes through. Its three
@@ -126,6 +126,7 @@ interface Thread {
   pulse?: THREE.Mesh;
   tether?: THREE.Line;
   closedAt?: number;
+  summonedAt?: number; // when its ruling stopped to wait for a person
 }
 
 interface Stamp {
@@ -205,7 +206,7 @@ function Threads() {
       }
       setAnchor(`case:${a.caseId}`, (out) => {
         out.copy(marker.position);
-        return marker.visible && th.closedAt === undefined;
+        return marker.visible && th.closedAt === undefined && th.summonedAt === undefined;
       });
     }
     return th;
@@ -290,7 +291,24 @@ function Threads() {
         (th.pulse!.material as THREE.MeshBasicMaterial).opacity = arrived && !closed ? 0.7 * (1 - beat) : 0;
         if (th.tether) (th.tether.material as THREE.LineBasicMaterial).opacity = arrived && !closed ? 0.22 : 0;
 
-        if (closed && c) {
+        if (!closed && arrived && c?.status === 'awaiting_approval' && c.arbiter.ruling) {
+          // The ruling is drafted but needs a person. The case is brought into the box, to where it
+          // will be filed if the ruling is approved, and waits there (see Waiting below).
+          if (th.summonedAt === undefined) th.summonedAt = now;
+          const t = (now - th.summonedAt) / 1000;
+          markerX = stopAt + (partyX(topParty(c.arbiter.ruling.split)) - stopAt) * ease(Math.min(1, t / 1.1));
+          th.markerMaterial!.opacity = Math.max(0, 1 - Math.max(0, t - 1.1) / 0.3);
+          (th.pulse!.material as THREE.MeshBasicMaterial).opacity = 0;
+          if (th.tether) (th.tether.material as THREE.LineBasicMaterial).opacity = 0;
+        }
+
+        if (closed && c && th.summonedAt !== undefined) {
+          // already in the box: its record, or nothing, takes over from the waiting mark
+          th.markerMaterial!.opacity = 0;
+          length = 0;
+          alpha = 0;
+          done = since > 0.2;
+        } else if (closed && c) {
           const filed = isFiled(c);
           color = c.status === 'blocked' ? STOP : outcomeColor(c);
           th.markerMaterial!.color.copy(outcomeColor(c));
@@ -356,6 +374,15 @@ const hash = (s: string) => {
   return (h >>> 0) / 4294967295;
 };
 
+// Where a case sits in the box once it has a ruling: the bay of the party held liable, the
+// height of its order value, the lane of its agent provider, nudged so neighbours do not overlap.
+const placeOf = (c: CaseFile) =>
+  new THREE.Vector3(
+    partyX(topParty(c.arbiter.ruling!.split)) + (hash(c.id) - 0.5) * BAY_W * 0.62,
+    yOf(c.purchase.total),
+    laneZ(c.purchase.provider) + (hash(c.id + 'z') - 0.5) * GAP * 0.6,
+  );
+
 const filedCases = (cases: Record<string, CaseFile>) => caseList(cases).filter(isFiled).slice(0, 80);
 
 // One decided case, filed in the box: in the bay of the party held liable, at
@@ -365,13 +392,13 @@ function Filed({ c }: { c: CaseFile }) {
   const open = useStore((s) => s.open);
   const hovered = useStore((s) => s.hover === c.id);
   const party = topParty(c.arbiter.ruling!.split);
-  const position = useMemo(
-    () => new THREE.Vector3(partyX(party) + (hash(c.id) - 0.5) * BAY_W * 0.62, yOf(c.purchase.total), laneZ(c.purchase.provider) + (hash(c.id + 'z') - 0.5) * GAP * 0.6),
-    [c.id, party, c.purchase.total, c.purchase.provider],
-  );
-  // If the case closed while this page was open, wait for its marker to bring it here.
+  const position = useMemo(() => placeOf(c), [c.id, party, c.purchase.total, c.purchase.provider]); // eslint-disable-line react-hooks/exhaustive-deps
+  // If the case closed while this page was open, wait for its marker to bring it here. A ruling
+  // that a person approved was already waiting on this spot, so it appears at once.
   const born = useRef(performance.now());
-  const delay = useRef(Date.now() + useStore.getState().skew - (c.closedAt ?? 0) < 4000 ? 1100 : Math.random() * 500);
+  const fresh = Date.now() + useStore.getState().skew - (c.closedAt ?? 0) < 4000;
+  const approved = c.stage === 'dispute' && c.purchase.total >= (useStore.getState().info?.approvalThreshold ?? Infinity);
+  const delay = useRef(approved ? 0 : fresh ? 1100 : Math.random() * 500);
   useAnchor(`filed:${c.id}`, (out) => (out.copy(position), hovered));
   useEffect(() => () => void (useStore.getState().hover === c.id && useStore.getState().set({ hover: null })), [c.id]);
 
@@ -414,6 +441,63 @@ function FiledCases() {
     <>
       {list.map((c) => (
         <Filed key={c.id} c={c} />
+      ))}
+    </>
+  );
+}
+
+let sceneMountedAt = 0;
+
+// A ruling that needs a person. It waits where it would be filed, as an empty ring on a column
+// of light that runs the height of the box, until someone approves it or sends it away.
+function Waiting({ c }: { c: CaseFile }) {
+  const group = useRef<THREE.Group>(null!);
+  const ring = useRef<THREE.Group>(null!);
+  const beam = useRef<THREE.Mesh>(null!);
+  const { camera } = useThree();
+  const position = useMemo(() => placeOf(c), [c.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const born = useRef(performance.now());
+  // If it stopped while this view was open, let its marker travel here first.
+  const delay = useRef(performance.now() - sceneMountedAt > 2500 ? 1100 : 0);
+  useAnchor(`wait:${c.id}`, (out) => (out.copy(position), performance.now() - born.current > delay.current));
+
+  useFrame(({ clock }) => {
+    const k = ease(THREE.MathUtils.clamp((performance.now() - born.current - delay.current) / 500, 0, 1));
+    const beat = 0.5 + 0.5 * Math.sin(clock.elapsedTime * 2.2);
+    group.current.visible = k > 0;
+    ring.current.quaternion.copy(camera.quaternion);
+    ring.current.scale.setScalar(k * (1 + beat * 0.25));
+    beam.current.scale.set(1, k, 1);
+    (beam.current.material as THREE.MeshBasicMaterial).opacity = 0.28 + beat * 0.3;
+  });
+
+  return (
+    <group ref={group} visible={false}>
+      <mesh ref={beam} position={[position.x, BOX_H / 2, position.z]}>
+        <boxGeometry args={[0.022, BOX_H, 0.022]} />
+        <meshBasicMaterial color={INK} transparent opacity={0.4} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[position.x, 0.01, position.z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.2, 0.215, 48]} />
+        <meshBasicMaterial color={INK} transparent opacity={0.5} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <group ref={ring} position={position}>
+        <mesh>
+          <ringGeometry args={[0.105, 0.128, 48]} />
+          <meshBasicMaterial color={INK} depthTest={false} transparent toneMapped={false} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+function WaitingCases() {
+  const cases = useStore((s) => s.cases);
+  const list = useMemo(() => waitingCases(cases).slice(0, 6), [cases]);
+  return (
+    <>
+      {list.map((c) => (
+        <Waiting key={c.id} c={c} />
       ))}
     </>
   );
@@ -624,12 +708,20 @@ function BoxLabels() {
       <Label anchor="side:after" className="gate-text side">
         Settled
       </Label>
-      {openCases(cases).map((c) => (
-        <Label key={c.id} anchor={`case:${c.id}`} className={`gate-tag ${c.status}`} onClick={() => open(c.id)}>
-          <b>{c.status === 'awaiting_approval' ? 'Needs approval' : c.stage === 'hold' ? 'Held' : 'Disputed'}</b>
-          <span>{eur(c.purchase.total)}</span>
-        </Label>
-      ))}
+      {openCases(cases).map((c) =>
+        c.status === 'awaiting_approval' ? (
+          <Label key={`w${c.id}`} anchor={`wait:${c.id}`} className="gate-tag wait" onClick={() => open(c.id)}>
+            <b>Waiting for you</b>
+            <span>{eur(c.purchase.total)} ruling</span>
+            <em>Review</em>
+          </Label>
+        ) : (
+          <Label key={c.id} anchor={`case:${c.id}`} className={`gate-tag ${c.status}`} onClick={() => open(c.id)}>
+            <b>{c.stage === 'hold' ? 'Held' : 'Disputed'}</b>
+            <span>{eur(c.purchase.total)}</span>
+          </Label>
+        ),
+      )}
       {hover && hover.arbiter.ruling && (
         <Label key={`h${hover.id}`} anchor={`filed:${hover.id}`} className="gate-tag tip">
           <b>{hover.purchase.item}</b>
@@ -643,6 +735,7 @@ function BoxLabels() {
 }
 
 export function GateScene() {
+  useMemo(() => (sceneMountedAt = performance.now()), []);
   return (
     <>
       <Canvas camera={{ position: [-6, 4, 11], fov: 30 }} dpr={[1, 2]} gl={{ antialias: true }}>
@@ -652,6 +745,7 @@ export function GateScene() {
         <Projector />
         <Box />
         <FiledCases />
+        <WaitingCases />
         <Threads />
         <OrbitControls makeDefault enablePan={false} enableZoom={false} target={TARGET} minPolarAngle={0.05} maxPolarAngle={1.5} enableDamping dampingFactor={0.08} rotateSpeed={0.5} />
         <EffectComposer>

@@ -214,6 +214,19 @@ label {
   color: var(--faint);
   cursor: default;
 }
+.btn.wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-color: var(--text);
+}
+.btn.wait i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text);
+  animation: blink 1.2s ease-in-out infinite;
+}
 .btn.small {
   height: 26px;
   padding: 0 9px;
@@ -737,13 +750,31 @@ select option {
   gap: 0;
   pointer-events: none !important;
 }
-.gate-tag.awaiting_approval {
+.gate-tag.wait {
+  align-items: center;
+  transform: translate(-50%, -100%) translateY(-22px);
+  padding: 6px 7px 6px 11px;
   background: var(--text);
   border-color: var(--text);
   color: #0a0a0b;
+  font-size: 12.5px;
+  z-index: 2;
 }
-.gate-tag.awaiting_approval span {
+.gate-tag.wait span {
   color: #4a4a4f;
+}
+.gate-tag.wait em {
+  font-style: normal;
+  font-weight: 600;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #0a0a0b;
+  color: var(--text);
+}
+.gate-tag.wait:hover {
+  background: #fff;
+  border-color: #fff;
 }
 
 /* ───────── case view ───────── */
@@ -1427,6 +1458,16 @@ blockquote.held label {
   background: color-mix(in srgb, var(--c) 12%, var(--surface-2));
 }
 
+.bar.draft > div {
+  background-image: repeating-linear-gradient(135deg, rgba(10, 10, 11, 0.22) 0 6px, transparent 6px 12px);
+  opacity: 0.75;
+}
+.draft-note {
+  margin-top: 9px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
 .outcome {
   display: flex;
   align-items: baseline;
@@ -1454,47 +1495,83 @@ blockquote.held label {
   color: var(--ok);
 }
 
-.approval {
+/* a ruling that needs a person: laid over the foot of the replay */
+.approval-banner {
+  position: absolute;
+  left: calc(316px + (100% - 316px) / 2);
+  bottom: 14px;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 11px 12px;
+  gap: 14px;
+  width: max-content;
+  max-width: calc(100% - 344px);
+  padding: 12px 12px 12px 16px;
+  border-radius: 12px;
+  background: var(--surface-2);
   border: 1px solid var(--text);
-  border-radius: 8px;
+  box-shadow: 0 0 0 4px rgba(242, 242, 240, 0.08), 0 24px 60px rgba(0, 0, 0, 0.6);
+  z-index: 21;
+  animation: banner 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-.approval > div {
+@keyframes banner {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+}
+.approval-banner .what {
   display: flex;
   flex-direction: column;
-  flex: 1 1 100%;
+  min-width: 0;
   font-size: 12.5px;
   color: var(--muted);
 }
-.approval > div b {
+.approval-banner .what b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text);
-  font-size: 13.5px;
-}
-.approval button {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
-  font-size: 13px;
+}
+.approval-banner .what i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text);
+  animation: blink 1.2s ease-in-out infinite;
+}
+.approval-banner .proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 14px;
+  border-left: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--soft);
   white-space: nowrap;
 }
-.approve {
+.approval-banner .minibar {
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+}
+.approval-banner .btn {
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+}
+.tag3d.paused {
+  transform: translate(-50%, -100%);
+  padding: 2px 8px;
+  border-radius: 5px;
   background: var(--text);
   color: #0a0a0b;
-}
-.approve:hover {
-  background: #fff;
-}
-.reject {
-  border: 1px solid var(--line-strong);
-}
-.reject:hover {
-  border-color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .rationale {
@@ -1985,8 +2062,12 @@ blockquote.held label {
 /* ───────── narrower screens ───────── */
 
 @media (min-width: 1300px) {
-  .replay-fact {
+  .replay-fact,
+  .approval-banner {
     left: calc(316px + (100% - 616px) / 2);
+  }
+  .approval-banner {
+    max-width: calc(100% - 644px);
   }
   .replay-lens {
     right: 300px;
@@ -2006,6 +2087,9 @@ blockquote.held label {
   }
 }
 @media (max-width: 1160px) {
+  .approval-banner .proposal {
+    display: none;
+  }
   .metric em {
     display: none;
   }

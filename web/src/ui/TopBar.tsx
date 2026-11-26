@@ -1,4 +1,4 @@
-import { eur, useStore } from '../store';
+import { eur, useStore, waitingCases } from '../store';
 import { endTour, startTour } from './Tour';
 
 const Icon = ({ d }: { d: string }) => (
@@ -33,6 +33,10 @@ export function TopBar() {
   const sound = useStore((s) => s.sound);
   const tour = useStore((s) => s.tour);
   const set = useStore((s) => s.set);
+  const cases = useStore((s) => s.cases);
+  const open = useStore((s) => s.open);
+  const waiting = waitingCases(cases);
+  const next = waiting.find((c) => c.id !== inCase) ?? waiting[0];
 
   return (
     <header className="topbar">
@@ -61,6 +65,12 @@ export function TopBar() {
         <Metric label="Stopped before settlement" value={stats ? eur(stats.prevented, 0) : '—'} note={stats ? `${stats.blocked} blocked` : undefined} />
       </div>
       <div className="controls">
+        {waiting.length > 0 && (
+          <button className="btn wait" onClick={() => open(next.id)} title="Open the ruling that has waited longest">
+            <i />
+            {waiting.length === 1 ? '1 ruling is waiting for you' : `${waiting.length} rulings are waiting for you`}
+          </button>
+        )}
         <button className="btn" onClick={() => (tour ? endTour() : void startTour())}>
           {tour ? 'Stop tour' : 'Guided tour'}
         </button>

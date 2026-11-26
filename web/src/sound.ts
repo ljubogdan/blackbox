@@ -19,6 +19,7 @@ function tone(freq: number, at: number, length: number, gain: number, type: Osci
 
 const CUES = {
   hold: () => tone(880, 0, 0.18, 0.05),
+  ask: () => (tone(659, 0, 0.25, 0.06), tone(659, 0.32, 0.4, 0.06)),
   reject: () => tone(220, 0, 0.22, 0.05, 'square', 150),
   block: () => (tone(196, 0, 0.5, 0.09, 'sine', 98), tone(784, 0.12, 0.6, 0.04)),
   verdict: () => (tone(523, 0, 0.35, 0.05), tone(659, 0.1, 0.35, 0.05), tone(784, 0.2, 0.6, 0.05)),

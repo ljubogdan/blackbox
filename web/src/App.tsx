@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { connect, useStore } from './store';
-import { CaseInfo, Inspector, Investigators, ReplayLens, Verdict } from './ui/CasePanels';
+import { ApprovalBanner, CaseInfo, Inspector, Investigators, ReplayLens, Verdict } from './ui/CasePanels';
 import { Engine } from './ui/Engine';
 import { LivePanels } from './ui/LivePanels';
 import { Builder } from './ui/Builder';
@@ -36,7 +36,7 @@ export function App() {
             <CaseScene c={c!} />
             <CaseInfo c={c!} />
             <Inspector c={c!} />
-            <ReplayLens />
+            {c!.status === 'awaiting_approval' ? <ApprovalBanner c={c!} /> : <ReplayLens />}
           </div>
           <section className="dock">
             <Investigators c={c!} />
