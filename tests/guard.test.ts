@@ -125,3 +125,11 @@ test('an error that retrying cannot fix is not retried', async () => {
   assert.match(textOf(await p.run('main')), /^INFERENCE_ERROR: Function call is missing a thought_signature/);
   assert.deepEqual(p.asked, ['main']);
 });
+
+test('an answer with neither text nor a tool call ends the turn instead of stalling the loop', async () => {
+  const { run } = provider({ m: [{ items: [], tokenUsage: undefined, rowResponse: null }] });
+  const out = await run('m');
+  assert.equal(out.items.length, 1);
+  assert.ok(out.items[0] instanceof ModelMessageItem);
+  assert.equal(textOf(out), '');
+});

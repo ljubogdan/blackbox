@@ -215,12 +215,21 @@ export class GuardedRunner implements InferenceRunner {
 
     await this.acquire();
     try {
-      return this.oneCallAtATime(request.context.id, await this.attempt(request));
+      return this.oneCallAtATime(request.context.id, this.endsSomehow(request.model, await this.attempt(request)));
     } catch (e) {
       return this.fail(brief(errorText(e)));
     } finally {
       this.release();
     }
+  }
+
+  // Mozaik's loop moves on only from a tool call or a text answer. A model can end its turn with
+  // neither (Claude does, after a tool result it has nothing to add to), and the loop then throws
+  // and never goes idle, so whatever waits for that turn waits forever. An empty answer ends it.
+  private endsSomehow(model: string, output: InferenceOutput): InferenceOutput {
+    if (output.items.some((it) => it instanceof FunctionCallItem || it instanceof ModelMessageItem)) return output;
+    console.error(`[inference] ${model}: answered with neither text nor a tool call; ending the turn`);
+    return { ...output, items: [...output.items, ModelMessageItem.rehydrate({ text: '' })] };
   }
 
   // Streaming is not used by this app.
