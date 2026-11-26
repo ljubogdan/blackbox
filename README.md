@@ -11,6 +11,8 @@ Blackbox records every agent purchase and does two things with that record:
 
 Every figure anyone reports is traceable to a sealed record.
 
+**Measured on real models:** Claude Sonnet 4.6 ruled 12 of 12 synthetic cases correctly, with its liability splits 6 points off the ground truth on average. Claude Haiku 4.5 ruled 11 of 12, 12 points off. No citation from either model failed the Verifier. See [Results](#results).
+
 > **Prototype.** Built to try the idea and learn Mozaik ahead of the JigJoy Black Friday AI Hackathon. All data is synthetic. No real accounts, no real money. Nothing here is financial advice.
 
 ## Run it
@@ -93,6 +95,7 @@ Twelve participants share one Mozaik runtime. Nobody calls anybody: each declare
 - Every number an agent reports must be cited, and every citation is checked in code against the record it names.
 - A true value can still be beside the point, so each investigator must also cite the records its own question is about: the Mandate Analyst the mandate and the order, Session Forensics the session, the Listing Auditor the listing and the order, the Claim Examiner the mandate or the session. A finding that misses one is sent back like one with a wrong value ([server/agents/verify.ts](server/agents/verify.ts)).
 - **What the checks do not prove.** The Verifier proves that every fact in a finding is real and that the investigator looked at the right records. It does not prove that the conclusion follows from them: no code can tell whether "this was fraud" is the right reading of a session record. That is left to three other layers: investigators who disagree must answer each other, the Arbiter sees every finding side by side, and a person approves every ruling on a large order. Writing rules that judge the reasoning was considered and rejected, because they would be written by the same hand as the scenarios and would know the answers.
+- No share without a finding. A party other than the customer can be given a share only if a verified finding puts at least 20/100 on it (`MATERIAL`); `issue_ruling` refuses any other split and the Arbiter has to issue it again. Without this, a model hedging with "fraud 5%" blocked a clean held payment, because any share outside the customer's blocks a hold.
 - No model produces a money amount. The Arbiter outputs percentages; the Ledger computes `order total × share` in whole cents and shows the formula and its source next to each line ([server/agents/team.ts](server/agents/team.ts)). On a shared ruling the amounts recovered and absorbed always add up to the refund: the odd cent goes to the share that rounding cut the most.
 - Records are sealed in a hash chain when a case opens ([server/data/scenarios.ts](server/data/scenarios.ts)): each hash covers the record and the hash before it. The Verifier recomputes a record's hash before accepting any citation to it, and re-walks the chain each time.
 - The scenario's ground truth is kept apart from the evidence and is never given to an agent. It is shown only after a case closes. Cases with a hand-set limit have no ground truth and are not scored.
@@ -101,7 +104,7 @@ Twelve participants share one Mozaik runtime. Nobody calls anybody: each declare
 
 | | Scripted (default) | Live |
 |---|---|---|
-| Needs | nothing | one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` in `.env` |
+| Needs | nothing | one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` in `.env`, or `LOCAL_BASE_URL` for your own model server |
 | Agent decisions | rule-based stand-in ([server/model/scripted.ts](server/model/scripted.ts)) | a real model |
 | Mozaik loop, tools, events, interception, verifier | real | real |
 
@@ -109,7 +112,9 @@ The stand-in is an `InferenceRunner` that drives the real loop (inference → to
 
 In scripted mode, 15% of first submissions carry a deliberately wrong citation (`FAULT_RATE`) so the Verifier's rejection path is exercised and visible.
 
-**Live mode has run one case end to end**, on Gemini (`gemini-3.5-flash-lite` for every agent): a held payment that the team released, matching the ground truth, with 13 citations checked and none rejected. One case says the plumbing works; it says nothing yet about how often a real model rules correctly. Anthropic and OpenAI keys are untested.
+**Live mode has run the full eval on Claude** (see [Results](#results)) and one case on Gemini. OpenAI keys are untested. `ANTHROPIC_BASE_URL` sends Claude requests through a gateway; note that a variable already set in your shell wins over `.env`.
+
+`LOCAL_BASE_URL` and `LOCAL_MODEL` run the team on your own Ollama or LM Studio server, which must speak the OpenAI Responses API. Raise its context window first: Blackbox's prompts pass 4,096 tokens, Ollama's default, within the first case. A 4B model was tried and was too slow to finish a case in 12 minutes, so this is for free plumbing tests, not for measuring accuracy.
 
 When a provider says no, the guarded runner ([server/model/guard.ts](server/model/guard.ts)) sorts the failure. A per-minute limit is waited out. A model that is out of quota for the day, or that stays overloaded, is rested and the request moves to the next model in `FALLBACK_MODELS` (for Gemini, `gemini-3.5-flash-lite` then `gemini-3.8-flash` by default). If no model can answer, the turn ends and the reason is written to the case's activity log. This has been seen working against the real API: a run that started on a model with no quota left finished its case on the next one.
 
@@ -127,6 +132,20 @@ npm run eval -- 3     # each kind three times: 36 cases
 ```
 
 A case takes about 15 model calls, so one round of 12 is about 180 calls. That is far beyond a free Gemini key (20 requests a day per model); a live eval needs a paid key. In scripted mode the eval runs for free and scores 12 of 12, which only shows the harness works.
+
+### Results
+
+One case of each of the 12 kinds per model, the same model in every role, on 26 November 2026:
+
+| Model | Correct | Mean off (points) | Citations rejected | Model calls |
+|---|---|---|---|---|
+| Claude Sonnet 4.6 | 12 / 12 | 6 | 0 | 186 |
+| Claude Haiku 4.5 | 11 / 12 | 12 | 0 | 200 |
+| Claude Haiku 4.5, before the `MATERIAL` rule | 10 / 12 | 24 | 0 | 211 |
+
+Naming the party at fault was the easy part; splitting the loss was not. Before the rule, Haiku spread small shares across parties the evidence cleared, and blocked the clean payment for a 5% fraud share. Haiku's remaining miss is the hidden-fee dispute (75% on the merchant, truth 41%). The hardest case for both models is the hidden-text injection held before settlement.
+
+One run per kind is a small sample: one different verdict moves a score by 8 points. The scenarios are synthetic and written by the same hand as the system, so this compares models on this benchmark, not on real disputes.
 
 ## Synthetic data
 
@@ -151,7 +170,7 @@ server/            Mozaik engine
   agents/tools.ts    read_evidence, submit_finding, issue_ruling
   agents/network.ts  attack signatures: what the network learns and recognises
   agents/verify.ts   citation checking
-  model/             scripted stand-in and the guarded runner
+  model/             scripted stand-in, the guarded runner, and local model servers
   data/              synthetic world and scenarios
 web/src/           React + three.js client
   views/Globe.tsx      the network as a globe
@@ -165,7 +184,7 @@ tests/             node:test suites, run with npm test
 
 ## Known gaps
 
-- Live mode has completed a single case, and `npm run eval` has not yet been run against a real model. Gemini's free tier allows 20 requests a day per model, and a case takes 10 to 15, so a free key runs about one case per model per day; a rehearsal of the whole demo needs a paid key. `MAX_RPM` paces calls for low quotas, and `INVESTIGATOR_MODEL` / `ARBITER_MODEL` pick the models.
+- The live eval has been run once per kind, on Claude only. Gemini's free tier allows 20 requests a day per model, and a case takes 10 to 15, so a free key runs about one case per model per day; a rehearsal of the whole demo needs a paid key. `MAX_RPM` paces calls for low quotas, and `INVESTIGATOR_MODEL` / `ARBITER_MODEL` pick the models.
 - Not exercised in a browser yet: the evidence-pack download and the sound cues.
 - Mozaik's loop runs only the first tool call of a model response. When a model asks for several at once, the guarded runner ([server/model/guard.ts](server/model/guard.ts)) hands the rest to the loop one at a time, so each is run, intercepted and recorded without another model call. This is covered by a test against Mozaik's loop with a scripted model, but not yet by a real provider: the scripted stand-in only ever returns one call per inference.
 - Nothing is persisted: restarting the engine starts a new run.
