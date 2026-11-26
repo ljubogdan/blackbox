@@ -26,6 +26,9 @@ export function investigatorInstruction(role: Role): string {
     `1. Call read_evidence with the ids of the records you need. You may request several at once.`,
     `2. Call submit_finding exactly once with:`,
     `   - liability: 0-100, how much of the loss the evidence puts on "${party}". 0 means the evidence clears them: if it does, say 0, not a small number to be safe.`,
+    ...(role === 'intent'
+      ? [`     Your figure is the customer's share of the loss, not how well the claim holds: a claim the records do not support puts the loss on the customer (a high figure), and a claim that holds clears them (0).`]
+      : []),
     `   - confidence: 0-100.`,
     `   - summary: at most 60 words, plain language.`,
     `   - citations: one entry for every number or fact in your summary, as { evidence_id, field, value }, with the value copied exactly from a record you read.`,

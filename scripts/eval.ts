@@ -11,11 +11,15 @@ import { PARTIES, ROLES, SCENARIOS } from '../shared/types';
 import { config } from '../server/config';
 
 // The same kinds the stream draws from: every fault as a dispute, every fault the screen can catch as a hold, and a clean hold.
-const KINDS: { sabotage: Sabotage; stage: 'hold' | 'dispute' }[] = [
+const ALL: { sabotage: Sabotage; stage: 'hold' | 'dispute' }[] = [
   ...SCENARIOS.map((sabotage) => ({ sabotage, stage: 'dispute' as const })),
   ...SCENARIOS.filter((x) => x !== 'friendly').map((sabotage) => ({ sabotage, stage: 'hold' as const })),
   { sabotage: 'clean', stage: 'hold' },
 ];
+// EVAL_KINDS=friendly/dispute,hijack/hold runs only those kinds: a cheap check of one change on a real model.
+const only = process.env.EVAL_KINDS?.split(',').map((k) => k.trim());
+const KINDS = only ? ALL.filter((k) => only.includes(`${k.sabotage}/${k.stage}`)) : ALL;
+if (KINDS.length === 0) throw new Error(`EVAL_KINDS matches no kind of case: ${process.env.EVAL_KINDS}`);
 const reps = Math.max(1, Number(process.argv[2] ?? 1));
 const queue = KINDS.flatMap((k) => Array.from({ length: reps }, () => k));
 const total = queue.length;
