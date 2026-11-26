@@ -1,5 +1,7 @@
 # Blackbox
 
+[![CI](https://github.com/ljubogdan/blackbox/actions/workflows/ci.yml/badge.svg)](https://github.com/ljubogdan/blackbox/actions/workflows/ci.yml)
+
 **The guarantee for purchases made by AI agents.**
 
 An AI shopping agent buys something. The customer says they never asked for it. Today nobody knows who pays: card networks have no dispute category for agent purchases, so the merchant usually absorbs the loss.
@@ -13,7 +15,16 @@ Every figure anyone reports is traceable to a sealed record.
 
 **Measured on real models:** Claude Sonnet 4.6 ruled 12 of 12 synthetic cases correctly, with its liability splits 6 points off the ground truth on average. Claude Haiku 4.5 ruled 34 of 36 (three of each kind), 17.5 points off. No citation from either model failed the Verifier. See [Results](#results).
 
-> **Prototype.** Built to try the idea and learn Mozaik ahead of the JigJoy Black Friday AI Hackathon. All data is synthetic. No real accounts, no real money. Nothing here is financial advice.
+> **Prototype.** Built on Mozaik for the JigJoy Black Friday AI Hackathon (Agents in Finance). All data is synthetic. No real accounts, no real money. Nothing here is financial or legal advice, and the app says so on every screen.
+
+## How it meets the brief
+
+| Criterion | Points | What to look at |
+|---|---|---|
+| Useful | 30 | The track's own ideas, *investigate held payments* and *route payments beyond an agent's authority to a human approver*, applied to purchases made by AI agents: a risky payment is held, investigated, then blocked or released, and a disputed one is split between the parties at fault. Rulings on orders of €1,000 or more wait for a person. |
+| Multi-agent design on Mozaik | 30 | Thirteen participants in one runtime; nobody calls anybody ([The agents](#the-agents)). Four investigators wake on the same event and run in parallel: `npm run proof` measures the peak number of model calls at once (13 in a scripted run). Shared state is a `RuntimeState` subclass ([server/state.ts](server/state.ts)). Checks between agents: the Verifier sends back any finding whose citation does not match its record, the Moderator makes investigators who disagree answer each other, and `issue_ruling` refuses a share no finding supports. |
+| It works | 25 | `npm install && npm run dev`, no API key needed. CI runs the typecheck, the test suite, the build and a full scripted eval on every push. On real models: Sonnet 4.6 12 of 12, Haiku 4.5 34 of 36 ([Results](#results)). |
+| Care with financial data | 15 | Every number an agent reports cites a field of a hash-sealed record, and code checks each one before the finding counts. No model produces a money amount: the Ledger computes them in whole cents and shows each formula and its source. The ground truth is never shown to an agent ([Care with financial data](#care-with-financial-data)). |
 
 ## Run it
 
@@ -63,7 +74,7 @@ On the left: the owner's instruction, the customer's claim or why the payment wa
 
 ## The agents
 
-Twelve participants share one Mozaik runtime. Nobody calls anybody: each declares the situations it reacts to.
+Thirteen participants share one Mozaik runtime. Nobody calls anybody: each declares the situations it reacts to.
 
 | Participant | Kind | Wakes on | Does |
 |---|---|---|---|

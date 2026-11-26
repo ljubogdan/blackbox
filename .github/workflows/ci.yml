@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      BLACKBOX_MODE: scripted # never a provider key in CI: everything here runs free
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # The whole team end to end on the stand-in model: every kind of case must close with the right ruling.
+      - name: Scripted eval
+        run: |
+          npm run eval | tee eval.log
+          grep -q "correct: 12 of 12" eval.log
