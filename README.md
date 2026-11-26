@@ -29,7 +29,15 @@ npm run start        # production build, served by the engine on http://localhos
 
 ## What you see
 
-**Live view.** A globe on Black Friday. Each arc is a purchase made by a shopping agent. A held payment stops in mid-air (white) until the team decides: it turns red and dissolves if blocked, or green and lands if released. Disputed purchases stay lit and pin a marker where the buyer is. The **Risk board** tab ranks agent providers and merchants by the loss their own conduct caused, and prices the guarantee for each.
+**Live view.** A glass box that every purchase made by a shopping agent passes through. Its three axes each mean one thing:
+
+- **Length is where the payment is:** before settlement, inside the box, settled. Inside, the box has a bay where held payments wait, then one bay for each party a ruling can hold liable.
+- **Height is the order value** (log scale).
+- **Depth is the agent provider** that made the purchase, one lane each.
+
+A risky payment stops in the box (a diamond) until the team decides: it goes back if blocked, or carries on if released. A disputed purchase waits on the settled side (a ring). When a case is decided it is filed in the bay of whoever was held liable, as a dot in that party's colour. Click a dot to open the case.
+
+Drag the box, or use **Side / Front / Top**. From the side you read the flow. From the front, the decided cases by agent provider and order value. From above, agent provider against who was liable. The **Risk pricing** tab shows the same thing as numbers. The strip at the bottom opens the engine view: every model call over the last 45 seconds, so you can see the agents working at the same moment.
 
 **Replay.** Click a case. The owner's instruction is drawn as a corridor:
 
@@ -41,7 +49,7 @@ Where the line leaves the corridor is where the purchase left the mandate. The l
 
 **Things to try**
 
-- **▶ Guided tour** walks one case from the globe to the verdict in about a minute. It drives the real engine; nothing is pre-recorded.
+- **Guided tour** walks one case from the box to the verdict in about a minute. It drives the real engine; nothing is pre-recorded.
 - **Break it yourself** lets you set the errand and the limit, pick a sabotage, and choose whether Blackbox steps in before or after settlement.
 - **What the agent read:** click a "View" step, then switch the page preview from what a person sees to what the agent read. Planted text shows up.
 - **What if the limit were…?** Drag the slider in the case panel and the journey moves in or out of the corridor as you drag. "Re-run" has the team rule on the same records with that limit.
@@ -110,7 +118,7 @@ In scripted mode, 15% of first submissions carry a deliberately wrong citation (
 | `hijack` | The agent's token was replayed from another device | Fraud (guarantee absorbs) |
 | `friendly` | A valid purchase the customer denies | Customer |
 
-Merchant and agent-provider names are invented. The globe's land outline is Natural Earth 110m via `world-atlas` (public domain).
+Merchant and agent-provider names are invented.
 
 ## Layout
 
@@ -122,7 +130,7 @@ server/            Mozaik engine
   model/             scripted stand-in and the guarded runner
   data/              synthetic world and scenarios
 web/src/           React + three.js client
-  views/Globe.tsx      live view
+  views/Gate.tsx       live view: the box
   views/CaseScene.tsx  the corridor replay
 shared/types.ts    types shared by both
 scripts/proof.ts   headless run

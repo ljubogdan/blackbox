@@ -24,6 +24,15 @@ export function useAnchor(id: string, fn: AnchorFn) {
   }, [id]);
 }
 
+// For objects managed outside React (the live view creates and removes them every frame).
+export function setAnchor(id: string, fn: AnchorFn | null) {
+  if (fn) registry.set(id, fn);
+  else {
+    registry.delete(id);
+    screen.delete(id);
+  }
+}
+
 // Goes inside the <Canvas>.
 export function Projector() {
   const { camera, size } = useThree();

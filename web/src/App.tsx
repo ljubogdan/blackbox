@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { connect, useStore } from './store';
 import { CaseInfo, Inspector, Investigators, Verdict } from './ui/CasePanels';
-import { Lanes } from './ui/Lanes';
+import { Engine } from './ui/Engine';
 import { LivePanels } from './ui/LivePanels';
 import { Builder } from './ui/Builder';
 import { TopBar } from './ui/TopBar';
 import { TourCaption } from './ui/Tour';
 import { CaseScene } from './views/CaseScene';
-import { GlobeScene } from './views/Globe';
+import { GateScene } from './views/Gate';
 
 export function App() {
   const view = useStore((s) => s.view);
@@ -16,6 +16,7 @@ export function App() {
   const back = useStore((s) => s.back);
   const connected = useStore((s) => s.connected);
   const builder = useStore((s) => s.builder);
+  const engine = useStore((s) => s.engine);
 
   useEffect(() => connect(), []);
   useEffect(() => {
@@ -26,7 +27,7 @@ export function App() {
 
   const inCase = view === 'case' && !!c;
   return (
-    <div className="app">
+    <div className={`app ${engine ? 'engine-open' : ''}`}>
       <TopBar />
       {inCase ? (
         <main className="case-view" key={selected}>
@@ -35,8 +36,8 @@ export function App() {
             <CaseInfo c={c!} />
             <Inspector c={c!} />
             <div className="readme3d">
-              <b>How to read this</b> Height is money: the ceiling is the owner's limit. Width is scope: the walls are the owner's own agent
-              session. The line is the agent's recorded journey.
+              Height is money: the ceiling is the owner's limit. Width is scope: the walls are the owner's own agent session. The line is
+              the agent's recorded journey.
             </div>
           </div>
           <section className="dock">
@@ -47,12 +48,12 @@ export function App() {
       ) : (
         <>
           <div className="stage live">
-            <GlobeScene />
+            <GateScene />
           </div>
           <LivePanels />
         </>
       )}
-      <Lanes caseId={inCase ? c!.id : null} />
+      <Engine caseId={inCase ? c!.id : null} />
       <TourCaption />
       {builder && <Builder />}
       {!connected && <div className="offline">Connecting to the engine…</div>}

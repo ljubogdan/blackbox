@@ -1,11 +1,12 @@
 import { Line, OrbitControls } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
+import { Bloom, EffectComposer, Noise, Vignette } from '@react-three/postprocessing';
+import { BlendFunction } from 'postprocessing';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { CaseFile, Role, TrailStep } from '../../../shared/types';
 import { ROLE_NAME, ROLES } from '../../../shared/types';
-import { BREACH, eur, MINT, PARTY_COLOR, ROLE_COLOR, useStore } from '../store';
+import { BG, BREACH, eur, INK, MINT, PARTY_COLOR, ROLE_COLOR, useStore } from '../store';
 import { Label, LabelLayer, Projector, useAnchor } from './labels';
 
 // The replay. The owner's instruction is a corridor:
@@ -151,15 +152,15 @@ const ceilingShader = {
     uniform float uHit;     // 0 until the journey gets there, then 1
     uniform float uWave;    // 0-1, the shockwave spreading from that point
     void main() {
-      vec3 mint = vec3(0.49, 0.96, 0.82);
-      vec3 red = vec3(1.0, 0.35, 0.30);
+      vec3 mint = vec3(0.31, 0.82, 0.63);
+      vec3 red = vec3(1.0, 0.36, 0.28);
       float scan = 0.5 + 0.5 * sin(vUv.x * 70.0 - uTime * 1.6);
       float rim = 1.0 - smoothstep(0.0, 0.07, vUv.y) * (1.0 - smoothstep(0.93, 1.0, vUv.y));
       float d = distance(vec2(vUv.x * uAspect, vUv.y), vec2(uBreach.x * uAspect, uBreach.y));
       float scar = uHit * exp(-d * d * 9.0);
       float ring = uHit * (1.0 - smoothstep(0.0, 0.05, abs(d - uWave * 1.6))) * (1.0 - uWave);
       vec3 color = mix(mint, red, clamp(scar * 1.5 + ring, 0.0, 1.0));
-      float alpha = 0.045 + 0.03 * scan + rim * 0.10 + scar * 0.5 + ring * 0.9;
+      float alpha = 0.04 + 0.018 * scan + rim * 0.10 + scar * 0.5 + ring * 0.9;
       gl_FragColor = vec4(color * (1.0 + scar * 1.4 + ring), alpha);
     }`,
 };
@@ -171,7 +172,7 @@ const wallShader = {
     void main() {
       // the back wall glows faintly towards the limit, which gives the corridor its depth
       float a = pow(clamp(vUv.y, 0.0, 1.0), 2.2) * 0.13 + 0.015;
-      gl_FragColor = vec4(0.49, 0.96, 0.82, a);
+      gl_FragColor = vec4(0.31, 0.82, 0.63, a);
     }`,
 };
 
@@ -239,10 +240,10 @@ function Corridor({ layout, progress, flash }: { layout: Layout; progress: React
   return (
     <group>
       <lineSegments geometry={edges} position={[cx, H / 2, 0]}>
-        <lineBasicMaterial ref={edgeMaterial} color={MINT} transparent opacity={0.34} toneMapped={false} />
+        <lineBasicMaterial ref={edgeMaterial} color={MINT} transparent opacity={0.4} toneMapped={false} />
       </lineSegments>
       <lineSegments geometry={grid}>
-        <lineBasicMaterial color="#5c7fb8" transparent opacity={0.16} />
+        <lineBasicMaterial color="#ffffff" transparent opacity={0.07} />
       </lineSegments>
       {/* the ceiling: the spending limit */}
       <mesh position={[cx, H, 0]} rotation={[-Math.PI / 2, 0, 0]} material={ceiling}>
@@ -254,7 +255,7 @@ function Corridor({ layout, progress, flash }: { layout: Layout; progress: React
       </mesh>
       <mesh position={[cx, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[len, W * 2]} />
-        <meshBasicMaterial color="#0b1730" transparent opacity={0.55} side={THREE.DoubleSide} depthWrite={false} />
+        <meshBasicMaterial color="#141417" transparent opacity={0.7} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
     </group>
   );
@@ -268,9 +269,9 @@ function Journey({ layout, progress }: { layout: Layout; progress: React.Mutable
 
   const geometry = useMemo(() => {
     const g = new THREE.TubeGeometry(layout.curve, TUBULAR, 0.034, RADIAL, false);
-    const inside = new THREE.Color(MINT).multiplyScalar(1.5);
-    const out = new THREE.Color(BREACH).multiplyScalar(2.1);
-    const intruder = new THREE.Color(PARTY_COLOR.fraud).multiplyScalar(2.0);
+    const inside = new THREE.Color(MINT).multiplyScalar(1.25);
+    const out = new THREE.Color(BREACH).multiplyScalar(1.6);
+    const intruder = new THREE.Color(PARTY_COLOR.fraud).multiplyScalar(1.5);
     const colors = new Float32Array(g.attributes.position.count * 3);
     for (let i = 0; i <= TUBULAR; i++) {
       const u = i / TUBULAR;
@@ -316,7 +317,7 @@ function Journey({ layout, progress }: { layout: Layout; progress: React.Mutable
         <meshBasicMaterial vertexColors toneMapped={false} />
       </mesh>
       <mesh geometry={halo}>
-        <meshBasicMaterial vertexColors transparent opacity={0.1} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+        <meshBasicMaterial vertexColors transparent opacity={0.06} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
       </mesh>
       <mesh ref={head}>
         <sphereGeometry args={[0.09, 20, 20]} />
@@ -466,7 +467,7 @@ const probeGroups = new Map<Role, THREE.Group>();
 function ChallengeBeam({ c }: { c: CaseFile }) {
   const roles = ROLES.filter((r) => c.investigators[r].challenge?.status === 'pending' || (c.crossExam === 'open' && c.investigators[r].challenge));
   const geometry = useMemo(() => new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), []);
-  const line = useMemo(() => new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, toneMapped: false })), [geometry]);
+  const line = useMemo(() => new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: INK, transparent: true, toneMapped: false })), [geometry]);
   useFrame(({ clock }) => {
     const a = probeGroups.get(roles[0]);
     const b = probeGroups.get(roles[1]);
@@ -573,7 +574,9 @@ const outcomeColor = (c: CaseFile) =>
   c.status === 'ruled' && c.arbiter.ruling
     ? PARTY_COLOR[(Object.keys(c.arbiter.ruling.split) as (keyof typeof PARTY_COLOR)[]).sort((a, b) => c.arbiter.ruling!.split[b] - c.arbiter.ruling!.split[a])[0]]
     : c.status === 'blocked' || c.status === 'released'
-      ? '#ffffff'
+      ? c.status === 'blocked'
+        ? BREACH
+        : MINT
       : MINT;
 
 function Replay({ c, layout }: { c: CaseFile; layout: Layout }) {
@@ -635,7 +638,7 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
   return (
     <LabelLayer>
       <Label anchor="limit" className="tag3d limit">
-        <b>LIMIT {eur(layout.max)}</b>
+        <b>Limit {eur(layout.max)}</b>
         <span className="src">{layout.mndId}.max_amount</span>
       </Label>
       <Label anchor="axis" className="tag3d axis">
@@ -684,7 +687,7 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
       <div className={`replay-fact ${b ? 'breach' : 'inside'}`}>
         {b?.kind === 'limit' && (
           <>
-            <b>WENT OVER THE LIMIT</b>
+            <b>Went over the limit</b>
             <span>
               {eur(over)} over at “{KIND_WORD[b.node.kind]}”
               <em>
@@ -695,7 +698,7 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
         )}
         {b?.kind === 'scope' && (
           <>
-            <b>LEFT THE OWNER’S SESSION</b>
+            <b>Left the owner’s session</b>
             <span>
               a different device took over at step {b.node.key.slice(1)}
               <em>{b.node.evidenceId}</em>
@@ -704,7 +707,7 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
         )}
         {!b && (
           <>
-            <b>STAYED INSIDE THE MANDATE</b>
+            <b>Stayed inside the mandate</b>
             <span>
               {eur(layout.total)} charged against a limit of {eur(layout.max)}
               <em>
@@ -792,8 +795,8 @@ export function CaseScene({ c }: { c: CaseFile }) {
       <Canvas camera={{ position: [1.6, 2.5, 13], fov: 34 }} dpr={[1, 2]} gl={{ antialias: true }}>
         <Director layout={layout} />
         <Projector />
-        <color attach="background" args={['#04060c']} />
-        <fog attach="fog" args={['#04060c', 22, 48]} />
+        <color attach="background" args={[BG]} />
+        <fog attach="fog" args={[BG, 22, 48]} />
         <Replay c={c} layout={layout} />
         <OrbitControls
           makeDefault
@@ -810,8 +813,9 @@ export function CaseScene({ c }: { c: CaseFile }) {
           rotateSpeed={0.5}
         />
         <EffectComposer>
-          <Bloom intensity={0.95} luminanceThreshold={0.25} luminanceSmoothing={0.5} mipmapBlur />
-          <Vignette eskil={false} offset={0.22} darkness={0.8} />
+          <Bloom intensity={0.6} luminanceThreshold={0.35} luminanceSmoothing={0.5} mipmapBlur />
+          <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.35} />
+          <Vignette eskil={false} offset={0.25} darkness={0.7} />
         </EffectComposer>
       </Canvas>
       <ReplayLabels c={c} layout={layout} />

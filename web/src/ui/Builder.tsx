@@ -45,7 +45,7 @@ export function Builder() {
         </header>
 
         <div className="step">
-          <label>1 · The errand</label>
+          <label>1. The errand</label>
           <div className="errand">
             <select value={item} onChange={(e) => pick(Number(e.target.value))}>
               {CATALOG_TITLES.map((t, i) => (
@@ -63,7 +63,7 @@ export function Builder() {
         </div>
 
         <div className="step">
-          <label>2 · The sabotage</label>
+          <label>2. The sabotage</label>
           <div className="options">
             {SABOTAGE.map((o) => (
               <button key={o.id} className={sabotage === o.id ? 'on' : ''} onClick={() => setSabotage(o.id)}>
@@ -75,11 +75,11 @@ export function Builder() {
         </div>
 
         <div className="step">
-          <label>3 · When Blackbox gets involved</label>
+          <label>3. When Blackbox gets involved</label>
           <div className="toggle">
             <button className={stage === 'hold' ? 'on' : ''} onClick={() => setStage('hold')}>
               <b>Before the money moves</b>
-              <span>The payment is screened and can be stopped in mid-air.</span>
+              <span>The payment is screened and can be stopped inside the box.</span>
             </button>
             <button className={stage === 'dispute' ? 'on' : ''} onClick={() => setStage('dispute')}>
               <b>After the customer complains</b>
@@ -90,7 +90,7 @@ export function Builder() {
 
         <footer>
           <span>Everything here is synthetic. No real purchase is made.</span>
-          <button className="primary" onClick={launch}>
+          <button className="btn primary" onClick={launch}>
             Run it
           </button>
         </footer>

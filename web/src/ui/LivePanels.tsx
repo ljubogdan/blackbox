@@ -1,37 +1,36 @@
 import { useState } from 'react';
 import type { BoardRow, CaseFile } from '../../../shared/types';
-import { PARTIES, PARTY_NAME, ROLES } from '../../../shared/types';
-import { caseList, eur, PARTY_COLOR, ROLE_COLOR, STATUS_LABEL, useStore } from '../store';
+import { PARTIES, PARTY_NAME } from '../../../shared/types';
+import { caseList, eur, PARTY_COLOR, useStore, type Lens } from '../store';
+import { CaseState } from './State';
+
+// The box reads differently from each side.
+const LENSES: { id: Lens; name: string; text: string }[] = [
+  { id: 'flow', name: 'Side', text: 'The path of a payment. Left to right: before settlement, inside the box, settled. Height is the order value.' },
+  { id: 'agents', name: 'Front', text: 'One column for each agent provider, with the order value going up. Every dot is a decided case.' },
+  { id: 'liability', name: 'Top', text: 'Agent providers down the side, the party held liable across. A crowded cell is an agent whose purchases keep going wrong the same way.' },
+];
 
 function CaseRow({ c }: { c: CaseFile }) {
   const open = useStore((s) => s.open);
   const ruling = c.arbiter.ruling;
   return (
     <button className={`case-row ${c.status}`} onClick={() => open(c.id)}>
-      <div className="row1">
-        <span className="mono id">
-          {c.id}
-          <i className={`kind ${c.stage}`}>{c.whatIfOf ? 'what-if' : c.stage === 'hold' ? 'held' : 'dispute'}</i>
-        </span>
+      <div className="l1">
+        <span className="item">{c.purchase.item}</span>
         <span className="amount">{eur(c.purchase.total)}</span>
       </div>
-      <div className="item">{c.purchase.item}</div>
-      <div className="claim">{c.stage === 'hold' ? `Held: ${c.flag ?? 'being screened'}` : `“${c.claim}”`}</div>
-      <div className="row3">
-        {c.closedAt && ruling ? (
-          <div className="minibar" title={PARTIES.filter((p) => ruling.split[p] > 0).map((p) => `${PARTY_NAME[p]} ${ruling.split[p]}%`).join(' · ')}>
+      <div className="l2">{c.stage === 'hold' ? `Held: ${c.flag ?? 'being screened'}` : `“${c.claim}”`}</div>
+      <div className="l3">
+        <CaseState c={c} detail />
+        {c.closedAt && ruling && (
+          <span className="minibar" title={PARTIES.filter((p) => ruling.split[p] > 0).map((p) => `${PARTY_NAME[p]} ${ruling.split[p]}%`).join(' · ')}>
             {PARTIES.filter((p) => ruling.split[p] > 0).map((p) => (
               <i key={p} style={{ width: `${ruling.split[p]}%`, background: PARTY_COLOR[p] }} />
             ))}
-          </div>
-        ) : (
-          <div className="pips">
-            {ROLES.filter((r) => c.investigators[r].status !== 'skipped').map((r) => (
-              <i key={r} className={c.investigators[r].status} style={{ ['--c' as string]: ROLE_COLOR[r] }} />
-            ))}
-          </div>
+          </span>
         )}
-        <span className={`status ${c.status}`}>{STATUS_LABEL[c.status]}</span>
+        <span className="mono id">{c.whatIfOf ? `${c.id} · what-if` : c.id}</span>
       </div>
     </button>
   );
@@ -66,62 +65,50 @@ function Board({ title, rows, base }: { title: string; rows: BoardRow[]; base: n
 export function LivePanels() {
   const cases = useStore((s) => s.cases);
   const stats = useStore((s) => s.stats);
-  const info = useStore((s) => s.info);
   const list = caseList(cases);
   const waiting = list.filter((c) => c.status === 'awaiting_approval');
   const [tab, setTab] = useState<'cases' | 'board'>('cases');
+  const lens = useStore((s) => s.lens);
+  const set = useStore((s) => s.set);
 
   return (
     <>
-      <section className="pitch">
-        <h1>
-          An AI bought this.
-          <br />
-          The customer says they never asked.
-          <br />
-          <em>Who pays?</em>
-        </h1>
+      <section className="intro">
+        <h1>When an AI agent buys the wrong thing, who pays?</h1>
         <p>
-          Every arc is a purchase made by a shopping agent on Black Friday. A risky one is stopped in mid-air; a disputed one is traced
-          back. Either way, investigators examine it at the same time, a verifier checks every figure they cite against the sealed record,
-          and an arbiter decides who is at fault.
+          Every purchase a shopping agent makes passes through this box and is recorded. A risky one is held before the money moves. A
+          disputed one is investigated, and the loss goes to whoever caused it.
         </p>
-        <div className="legend">
-          {PARTIES.map((p) => (
-            <span key={p}>
-              <i style={{ background: PARTY_COLOR[p] }} />
-              {PARTY_NAME[p]}
-            </span>
-          ))}
-        </div>
-        {stats && (
-          <div className="book">
-            <div className="good">
-              <label>Stopped before settlement</label>
-              <b>{eur(stats.prevented)}</b>
-            </div>
-            <div>
-              <label>Refunded to customers</label>
-              <b>{eur(stats.refunds)}</b>
-            </div>
-            <div>
-              <label>Recovered from the party at fault</label>
-              <b>{eur(stats.recovered)}</b>
-            </div>
-            <div>
-              <label>Absorbed by the guarantee</label>
-              <b>{eur(stats.absorbed)}</b>
-            </div>
-          </div>
-        )}
-        {info && info.mode === 'scripted' && (
-          <p className="fine">
-            Running without an API key: the agents' decisions come from a rule-based stand-in model, and{' '}
-            {Math.round(info.faultRate * 100)}% of first submissions carry a deliberately wrong citation so the verifier has something to
-            catch.
-          </p>
-        )}
       </section>
+      <div className="lens">
+        <div className="seg" role="tablist" aria-label="Which side of the box to look at">
+          {LENSES.map((l) => (
+            <button key={l.id} role="tab" aria-selected={lens === l.id} className={lens === l.id ? 'on' : ''} onClick={() => set({ lensGo: { to: l.id, n: Date.now() } })}>
+              {l.name}
+            </button>
+          ))}
+          <span>or drag the box</span>
+        </div>
+        <p>{LENSES.find((l) => l.id === lens)!.text}</p>
+        <div className="key">
+          <span>
+            <i className="line" />
+            Purchase
+          </span>
+          <span>
+            <i className="diamond" />
+            Held
+          </span>
+          <span>
+            <i className="ring" />
+            Disputed
+          </span>
+          <span>
+            <i className="dot" />
+            Decided, in the colour of who was liable
+          </span>
+        </div>
+      </div>
 
       <aside className="cases">
         <header>
@@ -130,7 +117,7 @@ export function LivePanels() {
               Cases
             </button>
             <button className={tab === 'board' ? 'on' : ''} onClick={() => setTab('board')}>
-              Risk board
+              Risk pricing
             </button>
           </div>
           {waiting.length > 0 && <span className="badge">{waiting.length} need approval</span>}
@@ -143,10 +130,10 @@ export function LivePanels() {
             ))}
           </div>
         ) : (
-          <div className="scroll">
+          <div className="scroll pad">
             <p className="board-note">
               What each party's own conduct has cost, from the rulings so far. The percentage is what the guarantee should charge on their
-              purchases: the base rate plus their own loss rate.
+              purchases: the base rate of {stats ? (stats.premiumBps / 100).toFixed(2) : '—'}% plus their own loss rate.
             </p>
             {stats && <Board title="Agent providers" rows={stats.board.providers} base={stats.premiumBps} />}
             {stats && <Board title="Merchants" rows={stats.board.merchants} base={stats.premiumBps} />}

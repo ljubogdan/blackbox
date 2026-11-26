@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import type { CaseFile, CitationCheck, EvidenceRecord, Role } from '../../../shared/types';
 import { PARTIES, PARTY_NAME, ROLE_NAME, ROLE_PARTY, ROLES } from '../../../shared/types';
 import { downloadPack } from '../pack';
-import { eur, nonce, PARTY_COLOR, ROLE_COLOR, STATUS_LABEL, topParty, useStore } from '../store';
+import { eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore } from '../store';
+import { CaseState } from './State';
 
 const QUESTION: Record<Role, string> = {
   mandate: 'Did the agent stay inside its instruction?',
@@ -61,7 +62,7 @@ function InvestigatorCard({ c, role }: { c: CaseFile; role: Role }) {
           </div>
         )}
       </div>
-      <div className="state">
+      <div className="progress">
         {busy && <span className="spin" />}
         {inv.status === 'verified' && <span className="ok">✓</span>}
         {inv.status === 'rejected' && <span className="no">✗</span>}
@@ -128,7 +129,7 @@ function PageMock({ rec }: { rec: EvidenceRecord }) {
         </button>
       </div>
       <div className="browser">
-        <div className="bar">
+        <div className="chrome">
           <i />
           <i />
           <i />
@@ -145,7 +146,7 @@ function PageMock({ rec }: { rec: EvidenceRecord }) {
         </div>
         {hidden && (
           <div className="uv">
-            <label>hidden text · {String(d.hidden_text_origin)}</label>
+            <label>Hidden text · {String(d.hidden_text_origin)}</label>
             <p>{hidden}</p>
           </div>
         )}
@@ -204,7 +205,7 @@ export function Inspector({ c }: { c: CaseFile }) {
           </table>
           <div className={`seal ${c.integrity.ok ? 'ok' : 'bad'}`} title={`sha256 ${rec.hash}\nprevious ${rec.prev}`}>
             <span className="mono">sha256 {rec.hash.slice(0, 16)}…</span>
-            <span>{c.integrity.ok ? `sealed · chain of ${c.integrity.records} verified` : 'CHAIN BROKEN'}</span>
+            <span>{c.integrity.ok ? `sealed · chain of ${c.integrity.records} verified` : 'chain broken'}</span>
           </div>
         </div>
       ) : (
@@ -238,7 +239,7 @@ export function Verdict({ c }: { c: CaseFile }) {
     <section className={`verdict ${c.status}`}>
       <div className="bar-wrap">
         <div className="bar-title">
-          <span>{hold ? 'WHO WOULD HAVE PAID' : 'WHO PAYS'}</span>
+          <h3>{hold ? 'Who would have paid' : 'Who pays'}</h3>
           {ruling ? (
             <span className="code mono">{ruling.reason_code}</span>
           ) : (
@@ -265,7 +266,7 @@ export function Verdict({ c }: { c: CaseFile }) {
 
       {(c.status === 'blocked' || c.status === 'released') && (
         <div className={`outcome ${c.status}`}>
-          <b>{c.status === 'blocked' ? 'BLOCKED' : 'RELEASED'}</b>
+          <b>{c.status === 'blocked' ? 'Blocked' : 'Released'}</b>
           <span>
             {c.status === 'blocked'
               ? `${eur(c.purchase.total)} never left the customer's account.`
@@ -343,12 +344,12 @@ function WhatIf({ c }: { c: CaseFile }) {
       <div className="row">
         <span>{value >= total ? 'The charge would fit under it.' : `The charge would be ${eur(total - value)} over.`}</span>
         {changed && (
-          <button className="ghost" onClick={() => set({ limitPreview: null })}>
+          <button className="btn small" onClick={() => set({ limitPreview: null })}>
             Reset
           </button>
         )}
       </div>
-      <button className="primary" disabled={!changed} onClick={() => request({ type: 'whatif', nonce: nonce(), caseId: c.id, max: value })}>
+      <button className="btn primary" disabled={!changed} onClick={() => request({ type: 'whatif', nonce: nonce(), caseId: c.id, max: value })}>
         Re-run the case with this limit
       </button>
     </div>
@@ -361,11 +362,11 @@ export function CaseInfo({ c }: { c: CaseFile }) {
   return (
     <aside className="case-info">
       <button className="backlink" onClick={back}>
-        ← All disputes
+        ← Live view
       </button>
       <div className="case-title">
         <span className="mono">{c.id}</span>
-        <span className={`status ${c.status}`}>{STATUS_LABEL[c.status]}</span>
+        <CaseState c={c} />
       </div>
       <h2>{p.item}</h2>
       <div className="meta">

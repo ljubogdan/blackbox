@@ -249,3 +249,6 @@ export const CATALOG_TITLES = [
   'Standing desk frame',
 ];
 export const CATALOG_PRICES = [104, 229, 349, 279, 319, 139, 189, 949, 259, 199, 34, 389];
+
+// Invented names of the companies whose shopping agents make the purchases.
+export const PROVIDER_NAMES = ['Orbit Assist', 'Kestrel Agent', 'Mira Shopper', 'Pilot One', 'Tandem'];

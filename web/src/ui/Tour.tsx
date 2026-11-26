@@ -17,20 +17,20 @@ export async function startTour() {
   const alive = () => running === token;
 
   st().back();
-  say(1, 'Black Friday. Every arc is a purchase made by an AI shopping agent, not by a person.');
+  say(1, 'Black Friday. Every line is a purchase made by an AI shopping agent, not by a person. All of them pass through one box.');
   await wait(5500);
   if (!alive()) return;
 
   const id = nonce();
   st().request({ type: 'custom', nonce: id, spec: { item: 1, max: 260, sabotage: 'injection', stage: 'hold' } }, false);
-  say(2, 'One payment looks wrong. Blackbox stops it in mid-air, before any money moves.');
+  say(2, 'One payment looks wrong. Blackbox holds it inside the box, before any money moves.');
   await until(() => st().lastCreated?.nonce === id, 6000, token);
   await wait(3200);
   const caseId = st().lastCreated?.nonce === id ? st().lastCreated!.caseId : null;
   if (!alive() || !caseId) return endTour();
 
   st().open(caseId);
-  say(3, 'This is that purchase, replayed. The corridor is what the owner allowed: the ceiling is their spending limit.');
+  say(3, 'This is that purchase, replayed inside the box. The corridor is what the owner allowed: the ceiling is their spending limit.');
   await wait(5500);
   if (!alive()) return;
 

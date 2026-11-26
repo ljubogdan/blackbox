@@ -1,4 +1,5 @@
 import type { GeoPoint } from '../../shared/types';
+import { PROVIDER_NAMES } from '../../shared/types';
 
 // Everything here is synthetic. Merchant and agent-provider names are invented.
 
@@ -59,7 +60,7 @@ export const MERCHANTS: (GeoPoint & { name: string })[] = [
   { name: 'Coastline Goods', city: 'Sydney', country: 'AU', lat: -33.87, lon: 151.21 },
 ];
 
-export const PROVIDERS = ['Orbit Assist', 'Kestrel Agent', 'Mira Shopper', 'Pilot One', 'Tandem'];
+export const PROVIDERS = PROVIDER_NAMES;
 
 export interface CatalogItem {
   title: string;

@@ -3,10 +3,10 @@ import { play } from './sound';
 import type { CaseFile, ClientMsg, EngineInfo, Lane, Party, PurchaseLite, Role, ServerMsg, Stats } from '../../shared/types';
 
 export const PARTY_COLOR: Record<Party, string> = {
-  customer: '#a78bfa',
-  agent_provider: '#fbbf24',
-  merchant: '#22d3ee',
-  fraud: '#fb7185',
+  customer: '#a593ff',
+  agent_provider: '#f0b449',
+  merchant: '#5cb8f2',
+  fraud: '#f2708d',
 };
 export const ROLE_COLOR: Record<Role, string> = {
   mandate: PARTY_COLOR.agent_provider,
@@ -14,12 +14,18 @@ export const ROLE_COLOR: Record<Role, string> = {
   merchant: PARTY_COLOR.merchant,
   intent: PARTY_COLOR.customer,
 };
-export const MINT = '#7cf5d0';
-export const BREACH = '#ff5a4d';
+// Colour means outcome: work in progress is neutral, and only a result is coloured.
+export const MINT = '#4fd1a1'; // inside the mandate, released
+export const BREACH = '#ff5d47'; // outside the mandate, blocked
+export const INK = '#f2f2f0'; // in progress, held
+export const BG = '#09090b';
 
 export interface Arc extends PurchaseLite {
   seenAt: number; // performance.now() when this browser first saw it
 }
+
+// The box means something different from each side: see views/Gate.tsx.
+export type Lens = 'flow' | 'agents' | 'liability';
 
 interface Store {
   connected: boolean;
@@ -35,6 +41,10 @@ interface Store {
   paused: boolean;
   sound: boolean;
   builder: boolean; // the "break it yourself" dialog
+  engine: boolean; // the engine drawer at the bottom
+  lens: Lens; // which way the live view is being looked at
+  lensGo: { to: Lens; n: number } | null; // a request to turn the box to a side
+  hover: string | null; // the filed case under the pointer
   limitPreview: number | null; // the limit being tried on the what-if slider
   pageMode: 'human' | 'agent';
   awaiting: string | null; // nonce of a case we asked for and want to open when it exists
@@ -65,6 +75,10 @@ export const useStore = create<Store>((set, get) => ({
   paused: false,
   sound: false,
   builder: false,
+  engine: false,
+  lens: 'flow',
+  lensGo: null,
+  hover: null,
   limitPreview: null,
   pageMode: 'human',
   awaiting: null,
