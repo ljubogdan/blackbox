@@ -34,6 +34,14 @@ console.warn = (...args: unknown[]) => {
 // A stray rejection inside an agent loop must not take the whole room down.
 process.on('unhandledRejection', (e) => console.error('[unhandled]', e));
 
+// On Ctrl+C or a stop signal, let Stripe calls already under way finish (at most 5 s), so a capture
+// or a cancel is not cut off halfway. Cases still open keep their authorisation.
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    void Promise.race([team.drain(), new Promise((r) => setTimeout(r, 5000))]).then(() => process.exit(0));
+  });
+}
+
 const models = config.localBaseUrl
   ? [...supportedModels, ...localModels(config.localBaseUrl, [config.investigatorModel, config.arbiterModel, ...config.fallbackModels])]
   : supportedModels;

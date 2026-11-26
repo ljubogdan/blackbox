@@ -630,8 +630,15 @@ function createLedger(): Agent {
 // the team's outcome then captures it (released) or cancels it (blocked). A disputed purchase is
 // charged, and refunded by exactly the amount the Ledger computed. No model is involved, and a
 // Stripe failure is written to the case's log without touching the ruling.
-function createPayments(gateway: PaymentGateway): Agent {
+function createPayments(gateway: PaymentGateway): { agent: Agent; drain: () => Promise<void> } {
   const payments = new Map<string, Promise<string | null>>(); // case id -> its Stripe payment id
+  // Stripe calls under way, so a shutdown can let them finish instead of cutting one off.
+  const inFlight = new Set<Promise<unknown>>();
+  const track = <T>(p: Promise<T>) => {
+    inFlight.add(p);
+    void p.finally(() => inFlight.delete(p));
+    return p;
+  };
   const finished = new Set<string>();
   // A case can close before its payment opens: a known attack is blocked, or a clean payment let
   // through, within the same event that opened it. Such a close is remembered and acted on as
@@ -652,7 +659,7 @@ function createPayments(gateway: PaymentGateway): Agent {
     const description = `Blackbox ${c.id}: ${c.purchase.item} at ${c.purchase.merchant.name}`;
     payments.set(
       c.id,
-      gateway[how](c.id, centsOf(c), description).then(
+      track(gateway[how](c.id, centsOf(c), description)).then(
         (id) => {
           c.payment = { id, url: dashboardUrl(id), status: how === 'authorise' ? 'authorised' : 'charged' };
           note(c, 'Payments', how === 'authorise' ? `Stripe authorised ${eur(centsOf(c))} without capturing it: ${id}` : `Stripe charged ${eur(centsOf(c))}, the purchase as it settled: ${id}`);
@@ -693,7 +700,7 @@ function createPayments(gateway: PaymentGateway): Agent {
     const pending = payments.get(c.id);
     if (!pending || finished.has(c.id)) return;
     finished.add(c.id);
-    void pending.then(async (id) => {
+    void track(pending.then(async (id) => {
       if (!id || !c.payment) return;
       const p = c.payment;
       try {
@@ -723,9 +730,12 @@ function createPayments(gateway: PaymentGateway): Agent {
       } catch (e) {
         failed(c, 'settlement', e);
       }
-    });
+    }));
   }
-  return codeParticipant('Payments', [onOpened, onClosed]);
+  const drain = async () => {
+    while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
+  };
+  return { agent: codeParticipant('Payments', [onOpened, onClosed]), drain };
 }
 
 // ───────────────────────── network (code) ─────────────────────────
@@ -863,6 +873,8 @@ function createBridge(): Agent {
 
 export interface Team {
   intake: Agent;
+  // Let Stripe calls already under way finish. Resolves at once without Stripe.
+  drain: () => Promise<void>;
   officer: Participant;
   roster: { name: string; kind: 'llm' | 'code' | 'human' }[];
 }
@@ -881,11 +893,12 @@ export function assembleTeam(gateway?: PaymentGateway): Team {
   const payments = gateway ? createPayments(gateway) : null;
 
   // The bridge joins first so it has mapped a loop to its case before anyone else needs it.
-  for (const p of [bridge, intake, sentinel, ...investigators, verifier, moderator, arbiter, ledger, network, officer, ...(payments ? [payments] : [])]) join(p);
+  for (const p of [bridge, intake, sentinel, ...investigators, verifier, moderator, arbiter, ledger, network, officer, ...(payments ? [payments.agent] : [])]) join(p);
 
   return {
     intake,
     officer,
+    drain: payments ? payments.drain : async () => {},
     roster: [
       { name: 'Intake', kind: 'code' },
       { name: 'Sentinel', kind: 'code' },
