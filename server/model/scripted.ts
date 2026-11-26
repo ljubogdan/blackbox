@@ -9,6 +9,7 @@ import {
 } from '@mozaik-ai/core';
 import type { Citation, EvidenceRecord, Finding, Party, Role, Scalar } from '../../shared/types';
 import { PARTIES, ROLE_PARTY } from '../../shared/types';
+import { MATERIAL } from '../agents/verify';
 import { Rng } from '../rng';
 
 // A stand-in "model" so the whole system runs with no API key. It drives the
@@ -298,7 +299,7 @@ function investigate(role: Role, records: EvidenceRecord[]): Finding {
 // Weigh the four verified findings into a split that sums to 100.
 function rule(findings: Finding[]): { split: Record<Party, number>; reason_code: string; rationale: string } {
   const weight = Object.fromEntries(PARTIES.map((p) => [p, 0])) as Record<Party, number>;
-  for (const f of findings) weight[f.party] = f.liability >= 15 ? f.liability : 0; // below 15 is treated as noise
+  for (const f of findings) weight[f.party] = f.liability >= MATERIAL ? f.liability : 0; // below that the finding clears its party
   const sum = PARTIES.reduce((s, p) => s + weight[p], 0);
   const split = Object.fromEntries(PARTIES.map((p) => [p, 0])) as Record<Party, number>;
   if (sum === 0) {

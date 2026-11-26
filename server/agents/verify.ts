@@ -1,5 +1,5 @@
-import type { CaseFile, Citation, CitationCheck, EvidenceKind, EvidenceRecord, Role, Scalar, TamperResult } from '../../shared/types';
-import { ROLES } from '../../shared/types';
+import type { CaseFile, Citation, CitationCheck, EvidenceKind, EvidenceRecord, Party, Role, Scalar, TamperResult } from '../../shared/types';
+import { ROLE_PARTY, ROLES } from '../../shared/types';
 import { recordHash, seal } from '../data/scenarios';
 
 // Plain code, no model: a cited value either matches the stored record or it does not.
@@ -50,6 +50,19 @@ export const COVERAGE: Record<Role, { kinds: EvidenceKind[]; what: string }[]> =
 export function missingCoverage(role: Role, caseId: string, citations: Citation[], evidence: Map<string, EvidenceRecord>): string[] {
   const cited = new Set(citations.map((c) => evidence.get(c.evidence_id)).filter((r) => r?.caseId === caseId).map((r) => r!.kind));
   return COVERAGE[role].filter((g) => !g.kinds.some((k) => cited.has(k))).map((g) => g.what);
+}
+
+// A finding below this puts no real weight on its party: models hedge with 5 or 10 where the
+// evidence clears someone. On a held payment any share outside the customer's blocks it, so a
+// hedge alone would stop a clean purchase.
+export const MATERIAL = 20;
+
+// Parties a split gives a share to without a verified finding that implicates them. The customer
+// is the residual party (a claim that fails lands on them), so only the other three are checked.
+export function unsupportedShares(c: CaseFile, split: Record<Party, number>): Party[] {
+  return ROLES.filter((role) => role !== 'intent')
+    .filter((role) => split[ROLE_PARTY[role]] > 0 && (c.investigators[role].finding?.liability ?? 0) < MATERIAL)
+    .map((role) => ROLE_PARTY[role]);
 }
 
 // Change one field of one record on a copy of the case's records, and run the same checks the
