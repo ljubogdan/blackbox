@@ -111,7 +111,9 @@ The stand-in is an `InferenceRunner` that drives the real loop (inference → to
 
 In scripted mode, 15% of first submissions carry a deliberately wrong citation (`FAULT_RATE`) so the Verifier's rejection path is exercised and visible.
 
-**Live mode has not been run yet** — no provider key was available when this was built. The prompts and tool schemas are written for it, but expect to tune them.
+**Live mode has run one case end to end**, on Gemini (`gemini-3.5-flash-lite` for every agent): a held payment that the team released, matching the ground truth, with 13 citations checked and none rejected. One case says the plumbing works; it says nothing yet about how often a real model rules correctly. Anthropic and OpenAI keys are untested.
+
+Gemini 3 models sign each function call and reject the next request unless the signature is sent back. Mozaik's Gemini mapper drops it, so [server/model/gemini.ts](server/model/gemini.ts) keeps the signatures and returns them.
 
 ## Synthetic data
 
@@ -149,7 +151,7 @@ tests/             node:test suites, run with npm test
 
 ## Known gaps
 
-- Live mode is untested end to end. The one attempt ran into a free-tier quota of 20 requests a day, about one case. `MAX_RPM` paces calls for low quotas.
+- Live mode has completed a single case. Gemini's free tier allows 20 requests a day per model, and a case takes 10 to 15, so a free key runs about one case per model per day; a rehearsal of the whole demo needs a paid key. `MAX_RPM` paces calls for low quotas, and `INVESTIGATOR_MODEL` / `ARBITER_MODEL` pick the models.
 - Not exercised in a browser yet: the evidence-pack download and the sound cues.
 - Mozaik's loop runs only the first tool call of a model response. When a model asks for several at once, the guarded runner ([server/model/guard.ts](server/model/guard.ts)) hands the rest to the loop one at a time, so each is run, intercepted and recorded without another model call. This is covered by a test against Mozaik's loop with a scripted model, but not yet by a real provider: the scripted stand-in only ever returns one call per inference.
 - Nothing is persisted: restarting the engine starts a new run.

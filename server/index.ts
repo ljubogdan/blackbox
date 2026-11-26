@@ -10,6 +10,7 @@ import { assembleTeam } from './agents/team';
 import { config } from './config';
 import { buildCase, buildPurchase, cloneWithLimit, type BuildOptions } from './data/scenarios';
 import { CATALOG, MERCHANTS, WIDGET_DOMAINS } from './data/world';
+import { GeminiSignatures } from './model/gemini';
 import { GuardedRunner } from './model/guard';
 import { ScriptedRunner } from './model/scripted';
 import { Rng } from './rng';
@@ -32,7 +33,7 @@ process.on('unhandledRejection', (e) => console.error('[unhandled]', e));
 
 const inner =
   config.mode === 'live'
-    ? new DefaultInferenceRunner(supportedModels, { validate() {} } as never)
+    ? new GeminiSignatures(new DefaultInferenceRunner(supportedModels, { validate() {} } as never), supportedModels)
     : new ScriptedRunner(config.seed, config.faultRate);
 const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, 90_000, config.maxRpm);
 
