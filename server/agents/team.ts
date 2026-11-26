@@ -3,7 +3,6 @@ import {
   createAgent,
   createHuman,
   DeveloperMessageItem,
-  FunctionCallItem,
   ModelContext,
   SituationSpecification,
   type InterceptionHandler,
@@ -273,13 +272,9 @@ function createArbiter(): Agent {
         note(c, 'Risk officer', 'approved the ruling');
         return t;
       }
-      // Rejected: rewrite the pending tool call so the ruling is not recorded.
-      const call = FunctionCallItem.rehydrate({
-        callId: t.input.call.callId,
-        name: t.input.call.name,
-        args: JSON.stringify({ ...args, human_rejected: true }),
-      });
-      return { nextStateId: 'function_call', input: { call, inferenceInput: t.input.inferenceInput } };
+      // Rejected: marked in shared state, never in the call's arguments, which the model writes.
+      s.rejected.add(c.id);
+      return t;
     },
   };
 

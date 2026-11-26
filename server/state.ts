@@ -29,6 +29,7 @@ export class BlackboxState extends RuntimeState {
   providers = new Map<string, BoardRow>();
   merchants = new Map<string, BoardRow>();
   approvals = new Map<string, (approved: boolean) => void>(); // case id -> waiting interception
+  rejected = new Set<string>(); // case ids whose proposed ruling a person rejected
 
   // Attacks the network has learned, by signature id.
   signatures = new Map<string, Signature>();

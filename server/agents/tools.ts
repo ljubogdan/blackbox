@@ -171,7 +171,7 @@ export function issueRulingTool(agentId: () => string): Tool {
       additionalProperties: false,
     },
     strict: false,
-    invoke: async (args: { case_id: string; split: Record<Party, number>; reason_code: string; rationale: string; human_rejected?: boolean }) => {
+    invoke: async (args: { case_id: string; split: Record<Party, number>; reason_code: string; rationale: string }) => {
       const c = state().cases.get(args.case_id);
       if (!c) return `Error: unknown case ${args.case_id}`;
       if (c.arbiter.ruling) return 'Error: this case already has a ruling.';
@@ -180,7 +180,7 @@ export function issueRulingTool(agentId: () => string): Tool {
       const sum = PARTIES.reduce((s, p) => s + split[p], 0);
       if (!valid || sum !== 100) return `Error: split must be four whole numbers that sum to 100 (got ${sum}).`;
       const ruling: Ruling = { split, reason_code: String(args.reason_code), rationale: String(args.rationale ?? '').slice(0, 900) };
-      if (args.human_rejected) {
+      if (state().rejected.has(c.id)) {
         c.arbiter = { status: 'failed' }; // the rejected proposal is not kept as a ruling
         c.status = 'manual_review';
         c.closedAt = Date.now();
