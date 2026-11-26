@@ -81,7 +81,7 @@ export function Engine({ caseId }: { caseId: string | null }) {
         </div>
       )}
       <div className="strip">
-        <span className="notice">Synthetic data. No real money.</span>
+        <span className="notice">Synthetic data. No real money. Not financial or legal advice.</span>
         <button className="engine-toggle" onClick={() => set({ engine: !open })} aria-expanded={open}>
           <span className={`live ${info?.mode ?? ''}`}>{info?.mode === 'live' ? 'Live model' : 'Scripted stand-in model'}</span>
           <span>

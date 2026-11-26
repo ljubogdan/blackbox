@@ -11,7 +11,7 @@ Blackbox records every agent purchase and does two things with that record:
 
 Every figure anyone reports is traceable to a sealed record.
 
-**Measured on real models:** Claude Sonnet 4.6 ruled 12 of 12 synthetic cases correctly, with its liability splits 6 points off the ground truth on average. Claude Haiku 4.5 ruled 11 of 12, 12 points off. No citation from either model failed the Verifier. See [Results](#results).
+**Measured on real models:** Claude Sonnet 4.6 ruled 12 of 12 synthetic cases correctly, with its liability splits 6 points off the ground truth on average. Claude Haiku 4.5 ruled 34 of 36 (three of each kind), 17.5 points off. No citation from either model failed the Verifier. See [Results](#results).
 
 > **Prototype.** Built to try the idea and learn Mozaik ahead of the JigJoy Black Friday AI Hackathon. All data is synthetic. No real accounts, no real money. Nothing here is financial advice.
 
@@ -135,17 +135,17 @@ A case takes about 15 model calls, so one round of 12 is about 180 calls. That i
 
 ### Results
 
-One case of each of the 12 kinds per model, the same model in every role, on 26 November 2026:
+The same model in every role, on 26 November 2026. Haiku ran three cases of each of the 12 kinds; Sonnet ran one of each.
 
 | Model | Correct | Mean off (points) | Citations rejected | Model calls |
 |---|---|---|---|---|
 | Claude Sonnet 4.6 | 12 / 12 | 6 | 0 | 186 |
-| Claude Haiku 4.5 | 11 / 12 | 12 | 0 | 200 |
-| Claude Haiku 4.5, before the `MATERIAL` rule | 10 / 12 | 24 | 0 | 211 |
+| Claude Haiku 4.5 | 34 / 36 | 17.5 | 0 | 606 |
+| Claude Haiku 4.5, before the `MATERIAL` rule (one of each) | 10 / 12 | 24 | 0 | 211 |
 
-Naming the party at fault was the easy part; splitting the loss was not. Before the rule, Haiku spread small shares across parties the evidence cleared, and blocked the clean payment for a 5% fraud share. Haiku's remaining miss is the hidden-fee dispute (75% on the merchant, truth 41%). The hardest case for both models is the hidden-text injection held before settlement.
+Naming the party at fault was the easy part; splitting the loss was not. Before the rule, Haiku spread small shares across parties the evidence cleared, and blocked the clean payment for a 5% fraud share. Since the rule, Haiku has released the clean payment every time. Its two misses in 36 were one price-switch dispute and one hijack dispute; its splits are loosest on hijacks (about 34 points off) and injections (22 to 28).
 
-One run per kind is a small sample: one different verdict moves a score by 8 points. The scenarios are synthetic and written by the same hand as the system, so this compares models on this benchmark, not on real disputes.
+Single runs vary: two 12-case Haiku runs of the same code came out 12 and 7 points off, and the 36-case run 17.5, so Sonnet's one run per kind is the weaker figure. The scenarios are synthetic and written by the same hand as the system, so this compares models on this benchmark, not on real disputes.
 
 ## Synthetic data
 
