@@ -122,7 +122,7 @@ Gemini 3 models sign each function call and reject the next request unless the s
 
 ## Measuring accuracy
 
-`npm run proof` shows the system working, but its "matches the ground truth" line is not a measure of accuracy: it counts payments the network blocked on a learned signature, which no model decided, and the mix of cases depends on the stream.
+`npm run proof` shows the system working. It counts the payments the network blocked on a learned signature apart from the cases the team decided, but it is still not a measure of accuracy: the mix of cases depends on the stream.
 
 `npm run eval` is the measure. It starts the engine with no stream (`STREAM=off`) and no network learning (`NETWORK=off`), so every case goes through the team. It runs each of the 12 kinds of case (six faults as disputes, five as holds, one clean hold) the same number of times, and for each kind prints how many rulings were right and how far the split was from the ground truth on average. A held payment is right if it was blocked or released correctly; a dispute is right if the party with the largest share is the right one. Every case, with its findings and log, is written to `eval-results/`.
 

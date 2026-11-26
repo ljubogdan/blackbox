@@ -4,7 +4,7 @@
 //   npm run proof -- 20
 import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
-import type { CaseFile, Lane, ServerMsg, Stats } from '../shared/types';
+import type { CaseFile, Lane, Party, ServerMsg, Stats } from '../shared/types';
 import { PARTIES, ROLES } from '../shared/types';
 import { config } from '../server/config';
 
@@ -45,10 +45,22 @@ function finish() {
   let live = 0;
   let peak = 0;
   for (const m of marks) peak = Math.max(peak, (live += m.d));
-  console.log(`\ninferences: ${lanes.size}   peak running at once: ${peak}   citations checked: ${stats?.citationsChecked}   rejected: ${stats?.citationsRejected}`);
-  console.log(`held before settlement: ${stats?.held}   blocked: ${stats?.blocked}   released: ${stats?.released}   value protected: €${stats?.prevented}`);
-  console.log(`challenges between investigators: ${stats?.challenges}   findings revised: ${stats?.revised}`);
-  console.log(`outcomes that match the scenario's ground truth: ${stats?.agreed} of ${stats?.scored} scored`);
+  // The engine's own counters cover every case it opened, including ones still running. Everything
+  // below the first line is counted from the cases in the table, so the two always agree.
+  console.log(`\nwhole run: inferences ${lanes.size}   peak running at once: ${peak}   citations checked: ${stats?.citationsChecked}   rejected: ${stats?.citationsRejected}`);
+  const holds = closed.filter((c) => c.stage === 'hold');
+  const blocked = holds.filter((c) => c.status === 'blocked');
+  const protectedEur = blocked.reduce((n, c) => n + c.purchase.total, 0);
+  console.log(`cases above: held ${holds.length}   blocked ${blocked.length}   released ${holds.filter((c) => c.status === 'released').length}   value protected: €${protectedEur.toFixed(2)}`);
+  const challenged = closed.flatMap((c) => ROLES.map((role) => c.investigators[role].challenge).filter((ch) => ch !== undefined));
+  console.log(`challenges between investigators: ${challenged.length}   findings revised: ${challenged.filter((ch) => ch.stance === 'revise').length}`);
+  // A payment the network blocked on a learned signature was decided by a match, not by the team.
+  const byNetwork = closed.filter((c) => c.network);
+  const team = closed.filter((c) => !c.network && c.truth && c.arbiter.ruling);
+  const top = (s: Record<Party, number>) => PARTIES.reduce((a, b) => (s[b] > s[a] ? b : a));
+  const right = team.filter((c) => (c.stage === 'hold' ? (c.status === 'blocked') === c.truth!.customer < 100 : top(c.arbiter.ruling!.split) === top(c.truth!)));
+  console.log(`decided by the team: ${right.length} of ${team.length} match the ground truth   blocked by the network on a learned signature: ${byNetwork.length}`);
+  console.log('this shows the system working; for accuracy by kind of case, use npm run eval');
   engine.kill();
   process.exit(0);
 }
