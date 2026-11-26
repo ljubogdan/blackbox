@@ -75,7 +75,7 @@ Twelve participants share one Mozaik runtime. Nobody calls anybody: each declare
 | Session Forensics | model | `purchase.held`, `dispute.opened` | Was this the owner's own session? |
 | Listing Auditor | model | `purchase.held`, `dispute.opened` | Did the merchant charge what it advertised? |
 | Claim Examiner | model | `dispute.opened` | Does the customer's claim hold up? (Skipped on a hold: nobody has complained yet.) |
-| Verifier | code | `finding.submitted` | Checks every cited value against the sealed record |
+| Verifier | code | `finding.submitted` | Checks every cited value against the sealed record, and that the investigator cited the records its question is about |
 | Moderator | code | all findings verified | If two findings blame different parties, makes each investigator answer the other |
 | Arbiter | model | `case.ready` | Splits liability between the four parties |
 | Risk officer | human | — | Approves or rejects rulings on large orders |
@@ -95,6 +95,8 @@ Twelve participants share one Mozaik runtime. Nobody calls anybody: each declare
 ### Care with financial data
 
 - Every number an agent reports must be cited, and every citation is checked in code against the record it names.
+- A true value can still be beside the point, so each investigator must also cite the records its own question is about: the Mandate Analyst the mandate and the order, Session Forensics the session, the Listing Auditor the listing and the order, the Claim Examiner the mandate or the session. A finding that misses one is sent back like one with a wrong value ([server/agents/verify.ts](server/agents/verify.ts)).
+- **What the checks do not prove.** The Verifier proves that every fact in a finding is real and that the investigator looked at the right records. It does not prove that the conclusion follows from them: no code can tell whether "this was fraud" is the right reading of a session record. That is left to three other layers: investigators who disagree must answer each other, the Arbiter sees every finding side by side, and a person approves every ruling on a large order. Writing rules that judge the reasoning was considered and rejected, because they would be written by the same hand as the scenarios and would know the answers.
 - No model produces a money amount. The Arbiter outputs percentages; the Ledger computes `order total × share` in whole cents and shows the formula and its source next to each line ([server/agents/team.ts](server/agents/team.ts)). On a shared ruling the amounts recovered and absorbed always add up to the refund: the odd cent goes to the share that rounding cut the most.
 - Records are sealed in a hash chain when a case opens ([server/data/scenarios.ts](server/data/scenarios.ts)): each hash covers the record and the hash before it. The Verifier recomputes a record's hash before accepting any citation to it, and re-walks the chain each time.
 - The scenario's ground truth is kept apart from the evidence and is never given to an agent. It is shown only after a case closes. Cases with a hand-set limit have no ground truth and are not scored.

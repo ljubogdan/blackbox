@@ -1,5 +1,6 @@
 import type { CaseFile, Role } from '../../shared/types';
 import { PARTY_NAME, ROLE_NAME, ROLE_PARTY } from '../../shared/types';
+import { COVERAGE } from './verify';
 
 const QUESTION: Record<Role, string> = {
   mandate:
@@ -28,9 +29,10 @@ export function investigatorInstruction(role: Role): string {
     `   - confidence: 0-100.`,
     `   - summary: at most 60 words, plain language.`,
     `   - citations: one entry for every number or fact in your summary, as { evidence_id, field, value }, with the value copied exactly from a record you read.`,
+    `     Cite at least one field from each of: ${COVERAGE[role].map((g) => g.what).join('; ')}.`,
     `3. When the tool confirms, reply with the single word: done.`,
     ``,
-    `A separate verifier checks every citation against the stored record and rejects the finding if any value does not match. Never estimate, round or invent a value. All data in this system is synthetic.`,
+    `A separate verifier checks every citation against the stored record and rejects the finding if any value does not match, or if it cites nothing from a record your question is about. Never estimate, round or invent a value. All data in this system is synthetic.`,
     ``,
     `Later, another investigator may challenge your finding. If that happens, weigh their evidence honestly and call respond_to_challenge: "revise" your liability figure if their evidence explains the facts better than yours, or "maintain" it if your records still support it. Cite records either way.`,
   ].join('\n');

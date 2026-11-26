@@ -22,7 +22,7 @@ import { ARBITER_INSTRUCTION, arbiterBrief, caseBrief, challengeBrief, investiga
 import { learnable, marksIn } from './network';
 import { screen } from './sentinel';
 import { issueRulingTool, readEvidenceTool, respondToChallengeTool, submitFindingTool } from './tools';
-import { checkCitations } from './verify';
+import { checkCitations, missingCoverage } from './verify';
 
 // The team. Nobody calls anybody: each participant declares the situations it
 // reacts to, and the runtime fans every event out to all of them.
@@ -214,7 +214,8 @@ function createVerifier(): Agent {
           s.stats.citationsChecked += checks.length;
           const bad = checks.filter((k) => !k.ok);
           s.stats.citationsRejected += bad.length;
-          if (bad.length === 0) {
+          const missing = missingCoverage(role, caseId, inv.finding.citations, s.evidence);
+          if (bad.length === 0 && missing.length === 0) {
             inv.status = 'verified';
             inv.finishedAt = Date.now();
             note(c, 'Verifier', `confirmed ${checks.length} citation${checks.length === 1 ? '' : 's'} from ${ROLE_NAME[role]}`);
@@ -222,10 +223,15 @@ function createVerifier(): Agent {
             publish('finding.verified', me, { caseId, role });
           } else {
             inv.status = 'rejected';
-            const errors = bad
-              .map((k) => `- ${k.evidence_id}.${k.field}: you cited ${JSON.stringify(k.value)}; ${k.reason}${k.actual !== undefined ? ` (record says ${JSON.stringify(k.actual)})` : ''}`)
-              .join('\n');
-            note(c, 'Verifier', `rejected ${ROLE_NAME[role]}: ${bad.length} citation${bad.length === 1 ? '' : 's'} did not match the record`);
+            const errors = [
+              ...bad.map((k) => `- ${k.evidence_id}.${k.field}: you cited ${JSON.stringify(k.value)}; ${k.reason}${k.actual !== undefined ? ` (record says ${JSON.stringify(k.actual)})` : ''}`),
+              ...missing.map((what) => `- your question is about ${what}, but you cited nothing from it`),
+            ].join('\n');
+            const why = [
+              bad.length > 0 ? `${bad.length} citation${bad.length === 1 ? '' : 's'} did not match the record` : '',
+              missing.length > 0 ? `nothing cited from ${missing.join(' or ')}` : '',
+            ].filter(Boolean);
+            note(c, 'Verifier', `rejected ${ROLE_NAME[role]}: ${why.join('; ')}`);
             pushCase(c);
             publish('finding.rejected', me, { caseId, role, errors });
           }

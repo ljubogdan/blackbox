@@ -1,4 +1,4 @@
-import type { Citation, CitationCheck, EvidenceRecord, Scalar } from '../../shared/types';
+import type { Citation, CitationCheck, EvidenceKind, EvidenceRecord, Role, Scalar } from '../../shared/types';
 import { recordHash } from '../data/scenarios';
 
 // Plain code, no model: a cited value either matches the stored record or it does not.
@@ -29,4 +29,24 @@ export function checkCitations(caseId: string, citations: Citation[], evidence: 
     const ok = same(c.field, c.value, actual);
     return { ...c, ok, actual, reason: ok ? undefined : 'value does not match the record' };
   });
+}
+
+// A true value can still be beside the point. Each investigator must cite the records its own
+// question is about: one record from every group. This checks where it looked, not how it reasoned.
+export const COVERAGE: Record<Role, { kinds: EvidenceKind[]; what: string }[]> = {
+  mandate: [
+    { kinds: ['MND'], what: 'the mandate (MND)' },
+    { kinds: ['ORD'], what: 'the order (ORD)' },
+  ],
+  integrity: [{ kinds: ['SES'], what: 'the session (SES)' }],
+  merchant: [
+    { kinds: ['LST'], what: 'the listing (LST)' },
+    { kinds: ['ORD'], what: 'the order (ORD)' },
+  ],
+  intent: [{ kinds: ['MND', 'SES'], what: 'the mandate (MND) or the session (SES)' }],
+};
+
+export function missingCoverage(role: Role, caseId: string, citations: Citation[], evidence: Map<string, EvidenceRecord>): string[] {
+  const cited = new Set(citations.map((c) => evidence.get(c.evidence_id)).filter((r) => r?.caseId === caseId).map((r) => r!.kind));
+  return COVERAGE[role].filter((g) => !g.kinds.some((k) => cited.has(k))).map((g) => g.what);
 }

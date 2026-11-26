@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Citation, EvidenceRecord, Scalar } from '../shared/types';
-import { checkCitations } from '../server/agents/verify';
+import { checkCitations, missingCoverage } from '../server/agents/verify';
 import { buildCase, chainIntegrity, seal } from '../server/data/scenarios';
 import { Rng } from '../server/rng';
 
@@ -125,4 +125,40 @@ test('removing or reordering records breaks the chain', () => {
   const [a, b, ...rest] = caseFile.evidence;
   assert.equal(chainIntegrity([b, a, ...rest]).ok, false);
   assert.equal(chainIntegrity([a, ...rest]).ok, false);
+});
+
+// ───────────────────────── coverage ─────────────────────────
+
+// True values that are beside the point: each investigator must cite the records its question is about.
+function citeFrom(record: EvidenceRecord): Citation {
+  const [field, value] = Object.entries(record.data)[0];
+  return { evidence_id: record.id, field, value: value as Scalar };
+}
+
+test('a finding that cites the records its question is about has full coverage', () => {
+  const { caseFile, evidence, record } = sealedCase();
+  const id = caseFile.id;
+  assert.deepEqual(missingCoverage('mandate', id, [citeFrom(record('MND')), citeFrom(record('ORD'))], evidence), []);
+  assert.deepEqual(missingCoverage('integrity', id, [citeFrom(record('SES'))], evidence), []);
+  assert.deepEqual(missingCoverage('merchant', id, [citeFrom(record('LST')), citeFrom(record('ORD'))], evidence), []);
+  assert.deepEqual(missingCoverage('intent', id, [citeFrom(record('SES'))], evidence), []);
+  assert.deepEqual(missingCoverage('intent', id, [citeFrom(record('MND'))], evidence), []);
+});
+
+test('true citations from the wrong records leave the question uncovered', () => {
+  const { caseFile, evidence, record } = sealedCase();
+  const id = caseFile.id;
+  // Session Forensics blaming fraud on the order and the listing alone: every value is real, none is about the session.
+  const offTopic = [citeFrom(record('ORD')), citeFrom(record('LST'))];
+  assert.ok(checkCitations(id, offTopic, evidence).every((k) => k.ok));
+  assert.deepEqual(missingCoverage('integrity', id, offTopic, evidence), ['the session (SES)']);
+  assert.deepEqual(missingCoverage('mandate', id, [citeFrom(record('ORD'))], evidence), ['the mandate (MND)']);
+  assert.deepEqual(missingCoverage('merchant', id, [citeFrom(record('SES'))], evidence), ['the listing (LST)', 'the order (ORD)']);
+});
+
+test("a record from another case does not cover this one's question", () => {
+  const mine = sealedCase(1);
+  const other = sealedCase(2);
+  const evidence = new Map([...mine.evidence, ...other.evidence]);
+  assert.deepEqual(missingCoverage('integrity', mine.caseFile.id, [citeFrom(other.record('SES'))], evidence), ['the session (SES)']);
 });
