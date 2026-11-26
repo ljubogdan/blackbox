@@ -31,38 +31,33 @@ npm run start        # production build, served by the engine on http://localhos
 
 ## What you see
 
-**Network.** The first screen: one glass box per merchant, linked into a mesh. Every merchant runs its own Blackbox, and the boxes learn from each other. When a ruling confirms an attack (hidden text planted by a third-party review widget, or a stolen agent token replayed from one device), the Network agent keeps its signature and a pulse spreads from that merchant's box to every other. When the same attack lands at another merchant, the Sentinel recognises it and blocks the payment on arrival, with no investigation: that box flashes red and a line points back to the merchant the knowledge came from. **Stopped by the network** in the top bar counts those payments; the **Network** tab lists every learned attack, what it has stopped, and the case it was learned from. Attacks arrive as campaigns: the same widget or device lands at a different merchant each time.
+**Network.** The first screen is a globe. Every merchant runs its own Blackbox in its own city, and each purchase an agent makes flies from the buyer's city to the merchant's. When a ruling confirms an attack (hidden text planted by a third-party review widget, or a stolen agent token replayed from one device), the Network agent keeps its signature and a wave goes round the world from that merchant's city, raising a shield over every merchant it passes. When the same attack lands at another merchant, the Sentinel recognises it and blocks the payment on arrival, with no investigation: it breaks on that city's shield and a line points back to the merchant the knowledge came from. Attacks arrive as campaigns: the same widget or device lands at a different merchant each time.
 
-Click a box to fly into it.
+The top bar counts what is **Guaranteed**, what was **Stopped before settlement** and what was **Stopped by the network**. The panel on the side has three tabs:
 
-**Merchant box.** One merchant's glass box, which every purchase made by a shopping agent passes through. Its three axes each mean one thing:
+- **Cases:** every open and recent case, held payments and disputes alike. Click a city on the globe to show only that merchant's cases; click a case to open it.
+- **Network:** every learned attack, what it has stopped, and the case it was learned from.
+- **Risk pricing:** what each agent provider's and merchant's own conduct has cost so far, and the rate the guarantee should charge them.
 
-- **Length is where the payment is:** before settlement, inside the box, settled. Inside, the box has a bay where held payments wait, then one bay for each party a ruling can hold liable.
-- **Height is the order value** (log scale).
-- **Depth is the agent provider** that made the purchase, one lane each.
+The strip at the bottom opens the engine view: every model call over the last 45 seconds, so you can see the agents working at the same moment.
 
-A risky payment stops in the box (a diamond) until the team decides: it goes back if blocked, or carries on if released. A disputed purchase waits on the settled side (a ring). When a case is decided it is filed in the bay of whoever was held liable, as a dot in that party's colour. Click a dot to open the case.
+**Case.** Opening a case flies down into the merchant's city. A case reads like a storage bar:
 
-Drag the box, or use **Side / Front / Top**. From the side you read the flow. From the front, the decided cases by agent provider and order value. From above, agent provider against who was liable. The **Risk pricing** tab shows the same thing as numbers. The strip at the bottom opens the engine view: every model call over the last 45 seconds, so you can see the agents working at the same moment.
+- **The amount charged**, and one line on what the records show before anyone rules (stayed inside the mandate, went over the limit, ordered more than asked, made from another device).
+- **One bar of the order taken apart:** the item as listed, units beyond what was asked for, price above the listing, an add-on the agent chose, a fee the listing did not show. Each part is in the colour of whoever caused it. The owner's limit is drawn across the bar, and everything past it is struck through.
+- **The agent's steps** under it, with the step where the purchase left the mandate marked.
 
-**Replay.** Click a case. The owner's instruction is drawn as a corridor:
-
-- **Height is money.** The ceiling is the spending limit.
-- **Width is scope.** The walls are the owner's own agent session.
-- **The line is the agent's recorded journey**, plotted from the stored trail.
-
-Drag to look from any side, or use **Side / Front / Top**: the side shows money against time, the top shows scope, and the front looks down the corridor at everything the owner allowed.
-
-Where the line leaves the corridor is where the purchase left the mandate. The lights are the investigators: they roam while reading evidence, park on the record they cite, and face each other when one challenges another.
+On the left: the owner's instruction, the customer's claim or why the payment was held, and the what-if slider. On the right: the sealed records and the case's activity. Click a part of the bar or a step to open its record. **Show the team** brings up the four investigators' cards (their findings, citations, and any challenge between them) and the verdict.
 
 **Things to try**
 
-- **Approve a ruling.** A ruling on an order of €1,000 or more stops and waits for you. In the box the case waits as an empty ring on a column of light, where it will be filed if you approve; the top bar counts what is waiting and opens the oldest. In the case, the arbiter's sweep stops mid-corridor and the ruling is shown as a draft until you approve it or send it to manual review. Once two rulings are waiting, the stream keeps new disputes to small orders (`MAX_AWAITING`).
+- **Approve a ruling.** A ruling on an order of €1,000 or more stops and waits for you. The top bar counts what is waiting and opens the oldest. In the case, the ruling is shown as a draft until you approve it or send it to manual review. Once two rulings are waiting, the stream keeps new disputes to small orders (`MAX_AWAITING`).
 - **Simulate** lets you set the purchase and the limit, pick what goes wrong, and choose whether Blackbox steps in before or after settlement.
-- **What the agent read:** click a "View" step, then switch the page preview from what a person sees to what the agent read. Planted text shows up.
-- **What if the limit were…?** Drag the slider in the case panel and the journey moves in or out of the corridor as you drag. "Re-run" has the team rule on the same records with that limit.
+- **What the agent read:** click a "Viewed" step, then switch the page preview from what a person sees to what the agent read. Planted text shows up.
+- **What if the limit were…?** Drag the slider and the limit line moves across the bar as you drag. "Re-run the case with this limit" has the team rule on the same records with that limit.
+- **Tamper with a record.** In an open record, change any field. The engine runs the Verifier's own checks on a copy and shows which seal breaks and which findings would be sent back. The case on file is never touched.
 - **Download the evidence pack** on a closed case: one HTML file with the outcome, every finding and its checked citations, and every sealed record.
-- **Sound** is off by default; the speaker button turns on short cues.
+- **Sound** is off by default; the speaker button turns on short cues. The pause button stops the purchase stream.
 
 ## The agents
 
@@ -159,9 +154,10 @@ server/            Mozaik engine
   model/             scripted stand-in and the guarded runner
   data/              synthetic world and scenarios
 web/src/           React + three.js client
-  views/Network.tsx    the network of merchant boxes
-  views/Gate.tsx       one merchant's box
-  views/CaseScene.tsx  the corridor replay
+  views/Globe.tsx      the network as a globe
+  ui/CaseStage.tsx     a case: the charge taken apart, and the agent's steps
+  ui/CasePanels.tsx    the case's records, investigators, verdict and what-if
+  ui/LivePanels.tsx    the Cases, Network and Risk pricing tabs
 shared/types.ts    types shared by both
 scripts/proof.ts   headless run
 tests/             node:test suites, run with npm test
