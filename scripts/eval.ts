@@ -3,12 +3,14 @@
 // ground truth. Writes every case to eval-results/. Usage:
 //   npm run eval             (each of the 12 kinds once)
 //   npm run eval -- 3        (each kind 3 times)
+//   EVAL_CASES=heldout/cases.json npm run eval -- 2   (cases written by hand, each twice; see heldout/README.md)
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import WebSocket from 'ws';
-import type { CaseFile, Lane, Party, Sabotage, ServerMsg } from '../shared/types';
+import type { CaseFile, ClientMsg, Lane, Party, Sabotage, ServerMsg, Stats } from '../shared/types';
 import { PARTIES, ROLES, SCENARIOS } from '../shared/types';
 import { config } from '../server/config';
+import { heldOutProblems, type HeldOutCase } from '../server/data/heldout';
 
 // The same kinds the stream draws from: every fault as a dispute, every fault the screen can catch as a hold, and a clean hold.
 const ALL: { sabotage: Sabotage; stage: 'hold' | 'dispute' }[] = [
@@ -18,8 +20,30 @@ const ALL: { sabotage: Sabotage; stage: 'hold' | 'dispute' }[] = [
 ];
 // EVAL_KINDS=friendly/dispute,hijack/hold runs only those kinds: a cheap check of one change on a real model.
 const only = process.env.EVAL_KINDS?.split(',').map((k) => k.trim());
-const KINDS = only ? ALL.filter((k) => only.includes(`${k.sabotage}/${k.stage}`)) : ALL;
-if (KINDS.length === 0) throw new Error(`EVAL_KINDS matches no kind of case: ${process.env.EVAL_KINDS}`);
+// One kind of case: its name in the tables, and the message that opens one.
+interface Kind {
+  name: string;
+  open: (nonce: string) => ClientMsg;
+}
+function generated(): Kind[] {
+  const kinds = only ? ALL.filter((k) => only.includes(`${k.sabotage}/${k.stage}`)) : ALL;
+  if (kinds.length === 0) throw new Error(`EVAL_KINDS matches no kind of case: ${process.env.EVAL_KINDS}`);
+  return kinds.map((k) => ({ name: `${k.sabotage}/${k.stage}`, open: (nonce) => ({ type: 'trigger', scenario: k.sabotage, stage: k.stage, nonce }) }));
+}
+// Cases written by hand. Every problem in the file is reported before anything runs, so no money is spent on a case that cannot open.
+function heldOut(file: string): Kind[] {
+  const specs: HeldOutCase[] = JSON.parse(readFileSync(file, 'utf8'));
+  if (!Array.isArray(specs) || specs.length === 0) throw new Error(`${file} must hold a list of cases`);
+  const problems = specs.flatMap(heldOutProblems);
+  const names = specs.map((c) => c.name);
+  for (const dup of new Set(names.filter((n, i) => names.indexOf(n) !== i))) problems.push(`"${dup}" is used by more than one case`);
+  if (problems.length > 0) {
+    console.error(`${file}: ${problems.length} problem${problems.length === 1 ? '' : 's'}, nothing was run:\n  ${problems.join('\n  ')}`);
+    process.exit(1);
+  }
+  return specs.map((spec) => ({ name: spec.name, open: (nonce) => ({ type: 'heldout', spec, nonce }) }));
+}
+const KINDS = process.env.EVAL_CASES ? heldOut(process.env.EVAL_CASES) : generated();
 const reps = Math.max(1, Number(process.argv[2] ?? 1));
 const queue = KINDS.flatMap((k) => Array.from({ length: reps }, () => k));
 const total = queue.length;
@@ -28,6 +52,7 @@ const limitMs = Number(process.env.EVAL_TIMEOUT_S ?? (config.mode === 'live' ? 9
 const port = Number(process.env.EVAL_PORT ?? 8798); // set it to run two evals at once
 
 console.log(`eval: ${total} cases (${KINDS.length} kinds × ${reps}), ${open} at a time, ${config.mode === 'live' ? `investigators ${config.investigatorModel}, arbiter ${config.arbiterModel}` : 'scripted stand-in'}`);
+if (config.mode === 'live') console.log(`spending cap: ${Number.isFinite(config.spendCapUsd) ? `$${config.spendCapUsd}` : 'none (set SPEND_CAP_USD)'}`);
 if (config.mode === 'scripted') console.log('scripted mode: the stand-in was written by the same hand as the scenarios, so this score says nothing about a real model.');
 
 const engine = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {
@@ -39,6 +64,7 @@ engine.stdout.on('data', (d) => process.stdout.write(`  ${d}`));
 const kindOf = new Map<string, string>(); // case id -> "sabotage/stage"
 const cases = new Map<string, CaseFile>();
 const lanes = new Map<string, Lane>();
+let stats: Stats | undefined;
 let sent = 0;
 const started = Date.now();
 
@@ -83,27 +109,29 @@ function score(c: CaseFile): Row {
 function finish(timedOut = false) {
   const rows = [...kindOf.keys()].map((id) => cases.get(id)).filter((c): c is CaseFile => !!c?.closedAt).map(score);
   const fmt = (s?: Record<Party, number>) => (s ? PARTIES.map((p) => s[p]).join('/') : '-');
-  console.log('\ncase    kind                  status          ok   split c/a/m/f   truth c/a/m/f   off  rejected  secs');
+  const w = Math.max(20, ...KINDS.map((k) => k.name.length));
+  console.log(`\ncase    ${'kind'.padEnd(w)}  status          ok   split c/a/m/f   truth c/a/m/f   off  rejected  secs`);
   for (const r of rows) {
     const ok = r.correct === null ? '-' : r.correct ? 'yes' : 'NO';
-    console.log(`${r.id}  ${r.kind.padEnd(20)}  ${r.status.padEnd(14)}  ${ok.padEnd(3)}  ${fmt(r.split).padEnd(14)}  ${fmt(r.truth).padEnd(14)}  ${String(r.off ?? '-').padEnd(3)}  ${String(r.rejected).padEnd(8)}  ${r.secs}`);
+    console.log(`${r.id}  ${r.kind.padEnd(w)}  ${r.status.padEnd(14)}  ${ok.padEnd(3)}  ${fmt(r.split).padEnd(14)}  ${fmt(r.truth).padEnd(14)}  ${String(r.off ?? '-').padEnd(3)}  ${String(r.rejected).padEnd(8)}  ${r.secs}`);
   }
-  console.log('\nkind                  correct   no ruling   mean off');
-  for (const k of KINDS) {
-    const name = `${k.sabotage}/${k.stage}`;
+  console.log(`\n${'kind'.padEnd(w)}  correct   no ruling   mean off`);
+  for (const { name } of KINDS) {
     const mine = rows.filter((r) => r.kind === name);
     const scored = mine.filter((r) => r.correct !== null);
     const offs = scored.map((r) => r.off!);
     const mean = offs.length ? Math.round(offs.reduce((a, b) => a + b, 0) / offs.length) : '-';
-    console.log(`${name.padEnd(20)}  ${`${scored.filter((r) => r.correct).length}/${mine.length}`.padEnd(8)}  ${String(mine.length - scored.length).padEnd(10)}  ${mean}`);
+    console.log(`${name.padEnd(w)}  ${`${scored.filter((r) => r.correct).length}/${mine.length}`.padEnd(8)}  ${String(mine.length - scored.length).padEnd(10)}  ${mean}`);
   }
   const right = rows.filter((r) => r.correct).length;
   console.log(`\ncorrect: ${right} of ${total}   closed without a ruling: ${rows.filter((r) => r.correct === null).length}   not finished: ${total - rows.length}   model calls: ${lanes.size}`);
+  if (stats && config.mode === 'live')
+    console.log(`spent: $${stats.spentUsd.toFixed(4)} at list prices (${stats.inputTokens} tokens in, ${stats.outputTokens} out)${rows.length ? `, $${(stats.spentUsd / rows.length).toFixed(4)} a case` : ''}`);
   if (timedOut) console.log(`timed out after ${limitMs / 1000}s (EVAL_TIMEOUT_S)`);
 
   mkdirSync('eval-results', { recursive: true });
   const file = `eval-results/${config.mode}-${new Date(started).toISOString().replace(/[:.]/g, '-')}.json`;
-  const meta = { mode: config.mode, ...(config.mode === 'live' && { investigatorModel: config.investigatorModel, arbiterModel: config.arbiterModel }), reps, seed: config.seed, started: new Date(started).toISOString(), secs: Math.round((Date.now() - started) / 1000) };
+  const meta = { mode: config.mode, ...(config.mode === 'live' && { investigatorModel: config.investigatorModel, arbiterModel: config.arbiterModel }), reps, seed: config.seed, started: new Date(started).toISOString(), secs: Math.round((Date.now() - started) / 1000), ...(process.env.EVAL_CASES && { cases: process.env.EVAL_CASES }), ...(stats && { spentUsd: stats.spentUsd, inputTokens: stats.inputTokens, outputTokens: stats.outputTokens }) };
   writeFileSync(file, JSON.stringify({ meta, rows, cases: [...kindOf.keys()].map((id) => cases.get(id)).filter(Boolean) }, null, 2));
   console.log(`every case, with its findings and log: ${file}`);
   engine.kill();
@@ -118,13 +146,15 @@ function connect(tries = 0) {
     const running = sent - [...kindOf.keys()].filter((id) => cases.get(id)?.closedAt).length; // counts cases asked for but not yet created
     for (let i = running; i < open && sent < total; i++) {
       const k = queue[sent];
-      ws.send(JSON.stringify({ type: 'trigger', scenario: k.sabotage, stage: k.stage, nonce: `${sent++}:${k.sabotage}/${k.stage}` }));
+      ws.send(JSON.stringify(k.open(`${sent++}:${k.name}`)));
     }
   };
   ws.on('open', topUp);
   ws.on('message', (raw) => {
     const msg: ServerMsg = JSON.parse(String(raw));
-    if (msg.type === 'created') kindOf.set(msg.caseId, msg.nonce.split(':')[1]);
+    if (msg.type === 'created') kindOf.set(msg.caseId, msg.nonce.slice(msg.nonce.indexOf(':') + 1));
+    if (msg.type === 'stats') stats = msg.stats;
+    if (msg.type === 'hello') stats = msg.stats;
     if (msg.type === 'lane') lanes.set(msg.lane.loopId, msg.lane);
     if (msg.type !== 'case' || !kindOf.has(msg.case.id)) return;
     const was = cases.get(msg.case.id)?.closedAt;
@@ -132,7 +162,8 @@ function connect(tries = 0) {
     if (msg.case.closedAt && !was) {
       const done = [...kindOf.keys()].filter((id) => cases.get(id)?.closedAt).length;
       console.log(`  ${done}/${total} closed: ${msg.case.id} ${kindOf.get(msg.case.id)} → ${msg.case.status}`);
-      if (done === total) finish();
+      // A moment for the last stats push, and any model reply still on its way, to arrive.
+      if (done === total) setTimeout(() => finish(), 1500);
       else topUp();
     }
   });

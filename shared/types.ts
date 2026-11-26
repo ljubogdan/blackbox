@@ -185,6 +185,9 @@ export interface Stats {
   challenges: number;
   revised: number; // findings changed after a challenge
   networkCaught: number; // payments blocked on arrival by a signature learned at another merchant
+  spentUsd: number; // model calls at list prices; 0 on the stand-in
+  inputTokens: number;
+  outputTokens: number;
   networkPrevented: number; // their value
   signatures: number;
   board: { providers: BoardRow[]; merchants: BoardRow[] };
@@ -258,7 +261,9 @@ export type ClientMsg =
   | { type: 'trigger'; scenario: string; stage?: 'hold' | 'dispute'; nonce?: string }
   | { type: 'pace'; paused: boolean }
   | { type: 'custom'; nonce: string; spec: CustomSpec }
-  | { type: 'whatif'; nonce: string; caseId: string; max: number };
+  | { type: 'whatif'; nonce: string; caseId: string; max: number }
+  // A case written by hand (server/data/heldout.ts), for scoring the team on cases it was not shaped around.
+  | { type: 'heldout'; nonce: string; spec: unknown };
 
 export const SCENARIOS = ['injection', 'quantity', 'price_switch', 'hidden_fee', 'hijack', 'friendly'] as const;
 export type Scenario = (typeof SCENARIOS)[number];

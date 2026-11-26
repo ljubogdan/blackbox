@@ -1,0 +1,106 @@
+[
+  {
+    "name": "example-wrong-colour",
+    "stage": "dispute",
+    "truth": { "customer": 0, "agent_provider": 100, "merchant": 0, "fraud": 0 },
+    "mandate": {
+      "instruction": "Buy me a black rain jacket, size M. Spend no more than €90. One unit only.",
+      "max_amount": 90,
+      "currency": "EUR",
+      "quantity": 1,
+      "category": "apparel",
+      "issued_at": "2026-11-20T09:12:00Z",
+      "issued_device": "iphone-15-owner",
+      "issued_city": "Belgrade"
+    },
+    "trail": [
+      { "kind": "search", "note": "Searched for \"black rain jacket size m\"", "merchant": "", "observed_price": null },
+      { "kind": "view", "note": "Viewed Rain jacket, black, size M", "merchant": "Nordwind Outdoor", "observed_price": 79, "item": "Rain jacket, black, size M", "stock": "out of stock" },
+      { "kind": "select", "note": "Chose the yellow one instead, same price", "merchant": "Nordwind Outdoor", "observed_price": 79, "item": "Rain jacket, yellow, size M" },
+      { "kind": "checkout", "note": "Paid", "merchant": "Nordwind Outdoor", "observed_price": 79, "item": "Rain jacket, yellow, size M" }
+    ],
+    "listing": {
+      "title": "Rain jacket, yellow, size M",
+      "merchant": "Nordwind Outdoor",
+      "listed_price": 79,
+      "fees_disclosed": true,
+      "snapshot_at": "2026-11-20T09:13:00Z"
+    },
+    "order": {
+      "title": "Rain jacket, yellow, size M",
+      "merchant": "Nordwind Outdoor",
+      "category": "apparel",
+      "quantity": 1,
+      "unit_price": 79,
+      "fees": 0,
+      "addons": 0,
+      "total": 79,
+      "charged_at": "2026-11-20T09:15:40Z"
+    },
+    "session": {
+      "issued_device": "iphone-15-owner",
+      "issued_city": "Belgrade",
+      "checkout_device": "iphone-15-owner",
+      "checkout_city": "Belgrade",
+      "same_device": true,
+      "distance_km": 0,
+      "token_age_min": 4,
+      "first_purchase_at_merchant": false
+    },
+    "delivery": {
+      "delivered": true,
+      "address_match": true,
+      "post_purchase_activity": "return requested, tags still on"
+    },
+    "claim": "I asked for a black jacket. The agent bought a yellow one because the black was out of stock. I don't want it."
+  },
+  {
+    "name": "example-held-new-shop",
+    "stage": "hold",
+    "truth": { "customer": 100, "agent_provider": 0, "merchant": 0, "fraud": 0 },
+    "mandate": {
+      "instruction": "Order two packs of AA batteries. Spend no more than €25.",
+      "max_amount": 25,
+      "currency": "EUR",
+      "quantity": 2,
+      "category": "household",
+      "issued_at": "2026-11-21T18:02:00Z",
+      "issued_device": "pixel-9-owner",
+      "issued_city": "Vienna"
+    },
+    "trail": [
+      { "kind": "search", "note": "Searched for \"aa batteries 8 pack\"", "merchant": "", "observed_price": null },
+      { "kind": "view", "note": "Viewed AA batteries, 8 pack", "merchant": "Kleinmarkt", "observed_price": 9.49, "item": "AA batteries, 8 pack" },
+      { "kind": "cart", "note": "Set quantity to 2", "merchant": "Kleinmarkt", "observed_price": 18.98, "item": "AA batteries, 8 pack", "quantity": 2 },
+      { "kind": "checkout", "note": "Payment submitted", "merchant": "Kleinmarkt", "observed_price": 18.98, "item": "AA batteries, 8 pack" }
+    ],
+    "listing": {
+      "title": "AA batteries, 8 pack",
+      "merchant": "Kleinmarkt",
+      "listed_price": 9.49,
+      "fees_disclosed": true,
+      "snapshot_at": "2026-11-21T18:03:00Z"
+    },
+    "order": {
+      "title": "AA batteries, 8 pack",
+      "merchant": "Kleinmarkt",
+      "category": "household",
+      "quantity": 2,
+      "unit_price": 9.49,
+      "fees": 0,
+      "addons": 0,
+      "total": 18.98,
+      "charged_at": "2026-11-21T18:05:10Z"
+    },
+    "session": {
+      "issued_device": "pixel-9-owner",
+      "issued_city": "Vienna",
+      "checkout_device": "pixel-9-owner",
+      "checkout_city": "Vienna",
+      "same_device": true,
+      "distance_km": 0,
+      "token_age_min": 3,
+      "first_purchase_at_merchant": true
+    }
+  }
+]

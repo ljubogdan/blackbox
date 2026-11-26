@@ -8,6 +8,7 @@ import {
   type ModelContext,
   type SemanticEvent,
 } from '@mozaik-ai/core';
+import { callCost, type Spend } from './cost';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -54,6 +55,10 @@ export interface GuardOptions {
   fallbacks?: string[];
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  // Dollars this runner may spend in all. Once the calls so far reach it, no model is called again.
+  spendCapUsd?: number;
+  // Told after every call that reports its token usage, with the totals so far.
+  onSpend?: (spend: Spend) => void;
 }
 
 const LONG_WAIT_S = 90; // a wait longer than this is a daily cap, not a per-minute one
@@ -71,6 +76,10 @@ export class GuardedRunner implements InferenceRunner {
   private readonly fallbacks: string[];
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
+  private readonly spendCapUsd: number;
+  private readonly onSpend?: (spend: Spend) => void;
+  readonly spend: Spend = { usd: 0, inputTokens: 0, outputTokens: 0, calls: 0 };
+  private unpriced = new Set<string>();
   lastError: string | null = null;
 
   constructor(
@@ -85,6 +94,23 @@ export class GuardedRunner implements InferenceRunner {
     this.fallbacks = options.fallbacks ?? [];
     this.sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.now = options.now ?? Date.now;
+    this.spendCapUsd = options.spendCapUsd ?? Infinity;
+    this.onSpend = options.onSpend;
+  }
+
+  private meter(model: string, output: InferenceOutput) {
+    const usage = output.tokenUsage;
+    if (!usage) return;
+    const cost = callCost(model, usage);
+    if (cost === 0 && !this.unpriced.has(model)) {
+      this.unpriced.add(model);
+      console.error(`[inference] ${model}: no price on file, so its calls are not counted toward the spending cap`);
+    }
+    this.spend.usd += cost;
+    this.spend.inputTokens += usage.inputTokens + (usage.inputTokenDetails?.cached_tokens ?? 0);
+    this.spend.outputTokens += usage.outputTokens;
+    this.spend.calls++;
+    this.onSpend?.({ ...this.spend });
   }
 
   private nextSlot = 0;
@@ -132,7 +158,9 @@ export class GuardedRunner implements InferenceRunner {
     for (let step = 1; ; step++) {
       await this.pace();
       try {
-        return await this.once(model === request.model ? request : { ...request, model });
+        const output = await this.once(model === request.model ? request : { ...request, model });
+        this.meter(model, output);
+        return output;
       } catch (e) {
         const text = errorText(e);
         const kind = failureKind(text);
@@ -212,6 +240,7 @@ export class GuardedRunner implements InferenceRunner {
     const seen = (this.perContext.get(request.context.id) ?? 0) + 1;
     this.perContext.set(request.context.id, seen);
     if (seen > this.maxPerContext) return this.fail('inference limit reached for this context');
+    if (this.spend.usd >= this.spendCapUsd) return this.fail(`spending cap of $${this.spendCapUsd} reached ($${this.spend.usd.toFixed(4)} spent)`);
 
     await this.acquire();
     try {

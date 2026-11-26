@@ -46,6 +46,8 @@ export const config = {
   maxConcurrentInferences: num(env.MAX_CONCURRENT_INFERENCES, live ? 6 : 64),
   // Live mode only: provider requests-per-minute cap; calls are spaced to stay under it. 0 = no pacing.
   maxRpm: live ? num(env.MAX_RPM, 0) : 0,
+  // Live mode only: dollars the run may spend on model calls, at list prices (server/model/cost.ts). Unset = no cap.
+  spendCapUsd: live ? num(env.SPEND_CAP_USD, Infinity) : Infinity,
   maxAttempts: 3,
   // STREAM=off: open no cases on a timer, only on request (npm run eval).
   stream: env.STREAM !== 'off',

@@ -9,6 +9,7 @@ import { SCENARIOS } from '../shared/types';
 import { assembleTeam } from './agents/team';
 import { tamperCheck } from './agents/verify';
 import { config } from './config';
+import { buildHeldOut, heldOutProblems, type HeldOutCase } from './data/heldout';
 import { buildCase, buildPurchase, cloneWithLimit, type BuildOptions } from './data/scenarios';
 import { CATALOG, MERCHANTS, WIDGET_DOMAINS } from './data/world';
 import { GeminiSignatures } from './model/gemini';
@@ -49,7 +50,11 @@ const inner =
   config.mode === 'live'
     ? new GeminiSignatures(new DefaultInferenceRunner(models, { validate() {} } as never), models)
     : new ScriptedRunner(config.seed, config.faultRate);
-const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, config.inferenceTimeoutMs, config.maxRpm, { fallbacks: config.fallbackModels });
+const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, config.inferenceTimeoutMs, config.maxRpm, {
+  fallbacks: config.fallbackModels,
+  spendCapUsd: config.spendCapUsd,
+  onSpend: (spend) => Object.assign(state().stats, { spentUsd: spend.usd, inputTokens: spend.inputTokens, outputTokens: spend.outputTokens }),
+});
 
 initializeRuntime({ state: new BlackboxState(), inferenceRunnerConfig: { runner } });
 if (config.stripeKey && !isTestKey(config.stripeKey)) console.error('STRIPE_SECRET_KEY is not a test key, so Stripe stays off: Blackbox never moves real money.');
@@ -109,12 +114,28 @@ function register(caseFile: ReturnType<typeof buildCase>['caseFile']) {
 
 function openCase(sabotage: Sabotage, opts: BuildOptions = {}, custom = false): string | null {
   if (caseN >= config.maxCases) return null;
-  const s = state();
   const { caseFile, truth } = buildCase(rng, ++caseN, sabotage, ++purchaseN, Date.now(), opts);
   caseFile.custom = custom || undefined;
-  register(caseFile);
   // A limit set by hand changes what the right answer is, so there is no ground truth to score against.
-  if (opts.max === undefined) s.truths.set(caseFile.id, truth);
+  return start(caseFile, opts.max === undefined ? truth : undefined);
+}
+
+// A case written by hand. Its problems are reported and it is not opened if it has any.
+function openHeldOut(spec: HeldOutCase): string | null {
+  const problems = heldOutProblems(spec);
+  if (problems.length > 0) {
+    console.error(`[heldout] not opened:\n  ${problems.join('\n  ')}`);
+    return null;
+  }
+  if (caseN >= config.maxCases) return null;
+  const { caseFile, truth } = buildHeldOut(spec, ++caseN, ++purchaseN, Date.now());
+  return start(caseFile, truth);
+}
+
+function start(caseFile: ReturnType<typeof buildCase>['caseFile'], truth?: ReturnType<typeof buildCase>['truth']): string {
+  const s = state();
+  register(caseFile);
+  if (truth) s.truths.set(caseFile.id, truth);
   remember(caseFile.purchase);
   if (caseFile.stage === 'hold') {
     // Not settled yet: the Sentinel decides whether to stop it.
@@ -267,6 +288,9 @@ wss.on('connection', (ws) => {
       const { item, max, sabotage, stage } = msg.spec ?? ({} as never);
       const valid = sabotage === 'clean' || (SCENARIOS as readonly string[]).includes(sabotage);
       const id = valid ? openCase(sabotage, { item: Number(item), max: Number.isFinite(Number(max)) ? Number(max) : undefined, stage: stage === 'hold' ? 'hold' : 'dispute' }, true) : null;
+      if (id) send(ws, { type: 'created', caseId: id, nonce: String(msg.nonce) });
+    } else if (msg.type === 'heldout') {
+      const id = openHeldOut(msg.spec as HeldOutCase);
       if (id) send(ws, { type: 'created', caseId: id, nonce: String(msg.nonce) });
     } else if (msg.type === 'whatif') {
       const id = whatIf(String(msg.caseId), Number(msg.max));

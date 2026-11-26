@@ -13,7 +13,7 @@ Blackbox records every agent purchase and does two things with that record:
 
 Every figure anyone reports is traceable to a sealed record.
 
-**Measured on real models:** Claude Sonnet 4.6 ruled 12 of 12 synthetic cases correctly, with its liability splits 6 points off the ground truth on average. Claude Haiku 4.5 ruled 33 of 36 (three of each kind), 13.3 points off. No citation from either model failed the Verifier. See [Results](#results).
+**Measured on real models:** Claude Sonnet 4.6 ruled 12 of 12 synthetic cases correctly, with its liability splits 6 points off the ground truth on average. Claude Haiku 4.5 ruled 33 of 36 (three of each kind), 13.3 points off. No citation from either model failed the Verifier. On 12 cases written apart from the generator, a single prompt matched the team (24 of 24 each) at a fortieth of the cost. See [Results](#results).
 
 > **Prototype.** Built on Mozaik for the JigJoy Black Friday AI Hackathon (Agents in Finance). All data is synthetic. No real accounts, no real money. Nothing here is financial or legal advice, and the app says so on every screen.
 
@@ -38,6 +38,7 @@ Open http://localhost:5173. No API key is needed: without one, the agents run on
 ```bash
 npm run proof        # headless: run 8 disputes, print rulings and measured concurrency
 npm run eval         # score the team on every kind of case (see Measuring accuracy)
+npm run baseline     # score one model call per case, no team, on the same cases
 npm test             # the Verifier, the hash chain, the Ledger's sums, and tool calls in the loop
 npm run start        # production build, served by the engine on http://localhost:8787
 ```
@@ -159,6 +160,10 @@ npm run eval -- 3     # each kind three times: 36 cases
 
 A case takes about 15 model calls, so one round of 12 is about 180 calls. That is far beyond a free Gemini key (20 requests a day per model); a live eval needs a paid key. In scripted mode the eval runs for free and scores 12 of 12, which only shows the harness works.
 
+Every live run prints what it spent at list prices, and `SPEND_CAP_USD` stops calling the model once that much is spent. On Haiku 4.5 a case cost the team $0.09 (20 calls, about 60,000 tokens in).
+
+**Held-out cases and a baseline.** `EVAL_CASES=heldout/cases.json npm run eval` scores the team on cases written by hand by someone who has not read the code, instead of the generated ones ([heldout/README.md](heldout/README.md) has the format and the commands). `npm run baseline` scores one model call per case on the same cases: every record in one prompt, no tools, no verifier, no cross-examination. It costs about $0.002 a case on Haiku 4.5, and it is the yardstick: if the team does not beat it, the extra agents are not earning their cost.
+
 ### Results
 
 The same model in every role, on 26 November 2026. Haiku ran three cases of each of the 12 kinds; Sonnet ran one of each.
@@ -172,6 +177,15 @@ The same model in every role, on 26 November 2026. Haiku ran three cases of each
 Naming the party at fault was the easy part; splitting the loss was not. Before the rule, Haiku spread small shares across parties the evidence cleared, and blocked the clean payment for a 5% fraud share. Since the rule, Haiku has released the clean payment every time. Its three misses in 36 were one injection dispute, one hidden-fee dispute and one price switch held before settlement; its splits are loosest on injections (33 to 38 points off) and that price switch.
 
 Runs vary: two 12-case Haiku runs of the same code came out 12 and 7 points off, and two 36-case runs 34 then 33 correct (17.5 then 13.3 points off, with the challenge wording changed in between), so Sonnet's one run per kind is the weaker figure. The scenarios are synthetic and written by the same hand as the system, so this compares models on this benchmark, not on real disputes.
+
+**Held-out cases against a one-prompt baseline.** Twelve cases in [heldout/cases.json](heldout/cases.json), written from how agent purchases go wrong rather than from the generator: a charger of the wrong wattage, a subscription instead of a one-off, a currency markup, a claim of non-delivery against a signed delivery, a limit the owner set before shipping, the owner's own new laptop, and six more. The baseline is one call per case with every record in the prompt and no tools ([scripts/baseline.ts](scripts/baseline.ts)). Haiku 4.5 in every role, each case twice, on 26 November 2026:
+
+| | Correct | Mean off (points) | Spent |
+|---|---|---|---|
+| The team | 24 / 24 | 7.3 | $1.87 ($0.078 a case) |
+| One prompt, no team | 24 / 24 | 5.8 | $0.05 ($0.002 a case) |
+
+Both named the right party every time, so these cases are too easy to tell the two apart, and on accuracy the team does not earn its cost here. Its loosest split was a price raised at payment, where it put 37 of 100 on fraud for a session that was the owner's own. What the team adds that one prompt does not is in how it decides: every figure checked against a sealed record, a record altered after sealing caught, a person on large orders, and a trail of who found what. A test that rewards that needs cases a single prompt would get wrong, such as altered or contradictory records. The cases were written after reading the code, so they are less independent than cases from someone who has not.
 
 ## Synthetic data
 
@@ -211,6 +225,7 @@ tests/             node:test suites, run with npm test
 
 ## Known gaps
 
+- The held-out cases were written by the same assistant that worked on the code, after reading it. Cases from someone who has not are still to come.
 - The live eval has run on Claude only: Haiku 4.5 three times per kind, Sonnet 4.6 once. Gemini's free tier allows 20 requests a day per model, and a case takes 10 to 15, so a free key runs about one case per model per day; a rehearsal of the whole demo needs a paid key. `MAX_RPM` paces calls for low quotas, and `INVESTIGATOR_MODEL` / `ARBITER_MODEL` pick the models.
 - Not exercised in a browser yet: the evidence-pack download and the sound cues.
 - Mozaik's loop runs only the first tool call of a model response. When a model asks for several at once, the guarded runner ([server/model/guard.ts](server/model/guard.ts)) hands the rest to the loop one at a time, so each is run, intercepted and recorded without another model call. This is covered by a test against Mozaik's loop with a scripted model, but not yet by a real provider: the scripted stand-in only ever returns one call per inference.
