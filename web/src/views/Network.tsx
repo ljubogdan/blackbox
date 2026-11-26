@@ -222,40 +222,45 @@ function Filed() {
   );
 }
 
-// Purchases arriving: a short streak into the side of each merchant's box.
-const STREAKS = 240;
+// Purchases arriving: small beads travelling into the side of each merchant's box. They are
+// solid and fade by size, not light: glowing points add up wherever they line up on screen,
+// and seen along a row of boxes they piled into bright blobs.
+const BEADS = 240;
+const BEAD = new THREE.Color('#d6d6d3');
+const HELD_BEAD = new THREE.Color('#ffffff');
 function Arrivals() {
-  const points = useRef<THREE.Points>(null!);
-  const { positions, colors } = useMemo(() => ({ positions: new Float32Array(STREAKS * 3), colors: new Float32Array(STREAKS * 3) }), []);
+  const beads = useRef<THREE.InstancedMesh>(null!);
+  const m = useMemo(() => new THREE.Matrix4(), []);
+  const p = useMemo(() => new THREE.Vector3(), []);
+  const q = useMemo(() => new THREE.Quaternion(), []);
+  const v = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const now = performance.now();
     let n = 0;
     for (const a of useStore.getState().arcs) {
       const age = (now - a.seenAt) / 1500;
-      if (age < 0 || age > 1 || n >= STREAKS) continue;
+      if (age < 0 || age > 1 || n >= BEADS) continue;
       const i = indexOf(a.merchant.name);
       if (i < 0) continue;
       const b = HOME[i];
       const k = 1 - Math.pow(1 - age, 2);
       const start = b.x - BW / 2 - 1.5;
-      positions.set([start + (BW / 2 + 1.5 - 0.1) * k, 0.2 + hash(a.id) * (BH - 0.4), b.z + (hash(a.id + 'z') - 0.5) * (BD - 0.3)], n * 3);
-      const glow = Math.sin(Math.PI * age) * (a.held ? 1.4 : 0.9);
-      colors.set([glow, glow, glow * 0.98], n * 3);
+      p.set(start + (BW / 2 + 1.5 - 0.1) * k, 0.2 + hash(a.id) * (BH - 0.4), b.z + (hash(a.id + 'z') - 0.5) * (BD - 0.3));
+      const size = Math.sin(Math.PI * age) * (a.held ? 1.3 : 1);
+      m.compose(p, q, v.setScalar(Math.max(0.001, size)));
+      beads.current.setMatrixAt(n, m);
+      beads.current.setColorAt(n, a.held ? HELD_BEAD : BEAD);
       n++;
     }
-    const g = points.current.geometry;
-    (g.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    (g.attributes.color as THREE.BufferAttribute).needsUpdate = true;
-    g.setDrawRange(0, n);
+    beads.current.count = n;
+    beads.current.instanceMatrix.needsUpdate = true;
+    if (beads.current.instanceColor) beads.current.instanceColor.needsUpdate = true;
   });
   return (
-    <points ref={points} frustumCulled={false}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.07} vertexColors transparent blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
-    </points>
+    <instancedMesh ref={beads} args={[undefined, undefined, BEADS]} frustumCulled={false}>
+      <sphereGeometry args={[0.032, 10, 10]} />
+      <meshBasicMaterial />
+    </instancedMesh>
   );
 }
 
