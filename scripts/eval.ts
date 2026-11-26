@@ -21,7 +21,7 @@ const queue = KINDS.flatMap((k) => Array.from({ length: reps }, () => k));
 const total = queue.length;
 const open = Number(process.env.MAX_OPEN_CASES ?? (config.mode === 'live' ? 2 : 4));
 const limitMs = Number(process.env.EVAL_TIMEOUT_S ?? (config.mode === 'live' ? 900 * reps : 300)) * 1000;
-const port = 8798;
+const port = Number(process.env.EVAL_PORT ?? 8798); // set it to run two evals at once
 
 console.log(`eval: ${total} cases (${KINDS.length} kinds × ${reps}), ${open} at a time, ${config.mode === 'live' ? `investigators ${config.investigatorModel}, arbiter ${config.arbiterModel}` : 'scripted stand-in'}`);
 if (config.mode === 'scripted') console.log('scripted mode: the stand-in was written by the same hand as the scenarios, so this score says nothing about a real model.');

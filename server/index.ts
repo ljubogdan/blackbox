@@ -13,6 +13,7 @@ import { buildCase, buildPurchase, cloneWithLimit, type BuildOptions } from './d
 import { CATALOG, MERCHANTS, WIDGET_DOMAINS } from './data/world';
 import { GeminiSignatures } from './model/gemini';
 import { GuardedRunner } from './model/guard';
+import { localModels } from './model/local';
 import { ScriptedRunner } from './model/scripted';
 import { Rng } from './rng';
 import { initializeRuntime, publish, state } from './runtime';
@@ -32,11 +33,14 @@ console.warn = (...args: unknown[]) => {
 // A stray rejection inside an agent loop must not take the whole room down.
 process.on('unhandledRejection', (e) => console.error('[unhandled]', e));
 
+const models = config.localBaseUrl
+  ? [...supportedModels, ...localModels(config.localBaseUrl, [config.investigatorModel, config.arbiterModel, ...config.fallbackModels])]
+  : supportedModels;
 const inner =
   config.mode === 'live'
-    ? new GeminiSignatures(new DefaultInferenceRunner(supportedModels, { validate() {} } as never), supportedModels)
+    ? new GeminiSignatures(new DefaultInferenceRunner(models, { validate() {} } as never), models)
     : new ScriptedRunner(config.seed, config.faultRate);
-const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, 90_000, config.maxRpm, { fallbacks: config.fallbackModels });
+const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, config.inferenceTimeoutMs, config.maxRpm, { fallbacks: config.fallbackModels });
 
 initializeRuntime({ state: new BlackboxState(), inferenceRunnerConfig: { runner } });
 const team = assembleTeam();
