@@ -3,7 +3,7 @@ import type { CaseFile, CitationCheck, EvidenceRecord, Role } from '../../../sha
 import { PARTIES, PARTY_NAME, ROLE_NAME, ROLE_PARTY, ROLES } from '../../../shared/types';
 import { useEffect, useState } from 'react';
 import { downloadPack } from '../pack';
-import { eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore, type Lens } from '../store';
+import { caseBox, eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore, type Lens } from '../store';
 import { CaseState } from './State';
 
 const QUESTION: Record<Role, string> = {
@@ -337,7 +337,7 @@ function WhatIf({ c }: { c: CaseFile }) {
 
 export function CaseInfo({ c }: { c: CaseFile }) {
   const back = useStore((s) => s.back);
-  const backTo = useStore((s) => (s.from === 'live' && s.merchant ? s.merchant : 'Network'));
+  const backTo = useStore((s) => caseBox(s) ?? 'Network');
   const p = c.purchase;
   return (
     <aside className="case-info">

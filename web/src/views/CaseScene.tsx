@@ -650,6 +650,10 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
     );
   const b = layout.breach;
   const over = b && b.node.price !== null ? b.node.price - layout.max : 0;
+  // The corridor draws money and session only. An order for more units than the owner asked for
+  // can fit under the limit and still be outside the mandate, so it is read from the records too.
+  const ordered = Number(c.evidence.find((e) => e.kind === 'ORD')?.data.quantity ?? c.mandate.quantity);
+  const extra = !b && ordered > c.mandate.quantity;
 
   return (
     <LabelLayer>
@@ -704,7 +708,7 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
         </Label>
       )}
       {/* What the replay itself shows, computed from the records before any agent rules on it. */}
-      <div className={`replay-fact ${b ? 'breach' : 'inside'}`}>
+      <div className={`replay-fact ${b || extra ? 'breach' : 'inside'}`}>
         {b?.kind === 'limit' && (
           <>
             <b>Went over the limit</b>
@@ -721,7 +725,15 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
             </span>
           </>
         )}
-        {!b && (
+        {extra && (
+          <>
+            <b>Ordered more than asked</b>
+            <span>
+              {ordered} units against {c.mandate.quantity} allowed, within the {eur(layout.max)} limit
+            </span>
+          </>
+        )}
+        {!b && !extra && (
           <>
             <b>Stayed inside the mandate</b>
             <span>

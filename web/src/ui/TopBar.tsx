@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { eur, useStore, waitingCases } from '../store';
+import { caseBox, eur, useStore, waitingCases } from '../store';
 
 const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -56,7 +56,7 @@ export function TopBar() {
   const back = useStore((s) => s.back);
   const toNetwork = useStore((s) => s.toNetwork);
   const view = useStore((s) => s.view);
-  const boxName = useStore((s) => (s.view === 'live' || (s.view === 'case' && s.from === 'live') ? s.merchant : null));
+  const boxName = useStore((s) => (s.view === 'live' ? s.merchant : caseBox(s)));
   const sound = useStore((s) => s.sound);
   const set = useStore((s) => s.set);
   const cases = useStore((s) => s.cases);

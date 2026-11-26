@@ -73,6 +73,11 @@ interface Store {
 
 let socket: WebSocket | null = null;
 
+// The box an open case goes back to. A case opened from inside one box can belong to another
+// (a simulation, a ruling waiting for approval), so its own merchant wins over the box last looked at.
+export const caseBox = (s: Store): string | null =>
+  s.view === 'case' && s.from === 'live' ? (s.selected && s.cases[s.selected]?.purchase.merchant.name) || s.merchant : null;
+
 export const useStore = create<Store>((set, get) => ({
   connected: false,
   info: null,
@@ -115,15 +120,17 @@ export const useStore = create<Store>((set, get) => ({
     const from = view === 'case' ? get().from : view;
     const arrive = () => set({ view: 'case', from, selected: caseId, inspect: null, limitPreview: null, pageMode: 'human', replayLens: 'flow', replayGo: null, entering: null, boxing: null, hover: null });
     // From a merchant's box, the camera dives into it first; the replay is what is inside it.
-    if (view !== 'live') return arrive();
+    // A case that sits in another merchant's box is not in this one to dive towards.
+    const home = get().cases[caseId]?.purchase.merchant.name;
+    if (view !== 'live' || (home && home !== get().merchant)) return arrive();
     if (get().entering) return;
     set({ entering: { caseId, at: performance.now() } });
     setTimeout(arrive, DIVE_MS);
   },
   // One level up: case to wherever it was opened from, box to the network.
   back: () => {
-    const { view, from, merchant } = get();
-    if (view === 'case' && from === 'live' && merchant) return set({ view: 'live', inspect: null, limitPreview: null, entering: null });
+    const box = caseBox(get());
+    if (box) return set({ view: 'live', merchant: box, inspect: null, limitPreview: null, entering: null });
     get().toNetwork();
   },
   enterBox: (merchant) => {
