@@ -103,19 +103,20 @@ function MerchantBox({ i }: { i: number }) {
 
   return (
     <group position={HOME[i]}>
-      <mesh position={[0, BH / 2, 0]} geometry={BOX}>
+      {/* the layers of a box draw in a fixed order, so they cannot swap places as the camera moves */}
+      <mesh position={[0, BH / 2, 0]} geometry={BOX} renderOrder={1}>
         <meshBasicMaterial color="#000000" transparent opacity={0.45} depthWrite={false} side={THREE.BackSide} />
       </mesh>
-      <mesh position={[0, BH / 2, 0]} geometry={BOX}>
+      <mesh position={[0, BH / 2, 0]} geometry={BOX} renderOrder={2}>
         <shaderMaterial args={[glassShader]} transparent depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[0, BH / 2, 0]} geometry={BOX}>
+      <mesh position={[0, BH / 2, 0]} geometry={BOX} renderOrder={3}>
         <meshBasicMaterial ref={fill} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </mesh>
-      <lineSegments position={[0, BH / 2, 0]} geometry={EDGE_LINES}>
+      <lineSegments position={[0, BH / 2, 0]} geometry={EDGE_LINES} renderOrder={4}>
         <lineBasicMaterial ref={edges} color={BASE} transparent opacity={0.55} toneMapped={false} />
       </lineSegments>
-      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={0}>
         <planeGeometry args={[BW + 0.9, BD + 0.8]} />
         <shaderMaterial
           ref={floor}
@@ -143,7 +144,7 @@ function MerchantBox({ i }: { i: number }) {
           setOver(false);
         }}
       >
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        <meshBasicMaterial colorWrite={false} depthWrite={false} />
       </mesh>
     </group>
   );
@@ -476,12 +477,13 @@ function NetworkLabels() {
 export function NetworkScene() {
   return (
     <>
-      <Canvas camera={{ position: [0, 9, 11], fov: 30 }} dpr={[1, 2]} gl={{ antialias: true }}>
+      <Canvas camera={{ position: [0, 9, 11], fov: 30, near: 0.5, far: 200 }} dpr={[1, 2]} gl={{ antialias: true }}>
         <color attach="background" args={[BG]} />
         <fog attach="fog" args={[BG, 16, 40]} />
         <Rig />
         <Projector />
-        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        {/* just below the boxes: level with their bottom faces, the two would flicker */}
+        <mesh position={[0, -0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[90, 70]} />
           <MeshReflectorMaterial resolution={1024} blur={[420, 140]} mixBlur={1} mixStrength={2} mixContrast={1} roughness={1} depthScale={0} color="#0c0c0e" metalness={0.6} mirror={0.5} />
         </mesh>

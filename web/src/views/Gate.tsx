@@ -549,8 +549,9 @@ function Box() {
 
   return (
     <group>
-      {/* the floor: dark and slightly reflective, so everything above it has a footprint */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+      {/* the floor: dark and slightly reflective, so everything above it has a footprint. It sits just
+          below the box: level with its bottom face, the two fight over the same pixels and flicker. */}
+      <mesh position={[0, -0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[80, 60]} />
         <MeshReflectorMaterial resolution={1024} blur={[420, 140]} mixBlur={1} mixStrength={2.2} mixContrast={1} roughness={1} depthScale={0} color="#0c0c0e" metalness={0.6} mirror={0.55} />
       </mesh>
@@ -558,15 +559,15 @@ function Box() {
         <lineBasicMaterial color="#ffffff" transparent opacity={0.09} />
       </lineSegments>
       {/* the box: dark glass, so what is held and filed inside it stays visible */}
-      <mesh position={[0, BOX_H / 2, 0]}>
+      <mesh position={[0, BOX_H / 2, 0]} renderOrder={1}>
         <boxGeometry args={[BX * 2, BOX_H, ZW * 2]} />
         <meshBasicMaterial color="#000000" transparent opacity={0.4} depthWrite={false} side={THREE.BackSide} />
       </mesh>
-      <mesh position={[0, BOX_H / 2, 0]}>
+      <mesh position={[0, BOX_H / 2, 0]} renderOrder={2}>
         <boxGeometry args={[BX * 2, BOX_H, ZW * 2]} />
         <shaderMaterial args={[glassShader]} transparent depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
-      <lineSegments geometry={edges} position={[0, BOX_H / 2, 0]}>
+      <lineSegments geometry={edges} position={[0, BOX_H / 2, 0]} renderOrder={4}>
         <lineBasicMaterial color={post} transparent opacity={0.75} toneMapped={false} />
       </lineSegments>
       <lineSegments geometry={lines.inner}>
@@ -746,7 +747,7 @@ export function GateScene() {
   useMemo(() => (sceneMountedAt = performance.now()), []);
   return (
     <>
-      <Canvas camera={{ position: [-6, 4, 11], fov: 30 }} dpr={[1, 2]} gl={{ antialias: true }}>
+      <Canvas camera={{ position: [-6, 4, 11], fov: 30, near: 0.5, far: 200 }} dpr={[1, 2]} gl={{ antialias: true }}>
         <color attach="background" args={[BG]} />
         <fog attach="fog" args={[BG, 14, 34]} />
         <Rig />
