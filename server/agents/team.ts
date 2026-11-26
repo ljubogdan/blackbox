@@ -18,6 +18,7 @@ import { GuardedRunner } from '../model/guard';
 import { join, note, publish, pushCase, resolveRuntime, runLoop, state } from '../runtime';
 import { keyOf, push, splitKey } from '../state';
 import { chainIntegrity } from '../data/scenarios';
+import { dashboardUrl, type PaymentGateway } from '../payments/stripe';
 import { ARBITER_INSTRUCTION, arbiterBrief, caseBrief, challengeBrief, investigatorInstruction } from './prompts';
 import { learnable, marksIn } from './network';
 import { screen } from './sentinel';
@@ -623,6 +624,95 @@ function createLedger(): Agent {
   return codeParticipant('Ledger', [onPurchase, onRuling]);
 }
 
+// ───────────────────────── payments (code) ─────────────────────────
+
+// Mirrors each case's money in Stripe test mode. A held payment is authorised but not captured;
+// the team's outcome then captures it (released) or cancels it (blocked). A disputed purchase is
+// charged, and refunded by exactly the amount the Ledger computed. No model is involved, and a
+// Stripe failure is written to the case's log without touching the ruling.
+function createPayments(gateway: PaymentGateway): Agent {
+  const payments = new Map<string, Promise<string | null>>(); // case id -> its Stripe payment id
+  const finished = new Set<string>();
+  const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`;
+  // The order record's total, the figure the Ledger computes from.
+  const centsOf = (c: CaseFile) => Math.round(Number(c.evidence.find((e) => e.kind === 'ORD')!.data.total) * 100);
+  const failed = (c: CaseFile, what: string, e: unknown) => {
+    if (c.payment) c.payment.status = 'failed';
+    note(c, 'Payments', `Stripe ${what} failed: ${e instanceof Error ? e.message : String(e)}`);
+    pushCase(c);
+  };
+
+  const open = (c: CaseFile, how: 'authorise' | 'charge') => {
+    const description = `Blackbox ${c.id}: ${c.purchase.item} at ${c.purchase.merchant.name}`;
+    payments.set(
+      c.id,
+      gateway[how](c.id, centsOf(c), description).then(
+        (id) => {
+          c.payment = { id, url: dashboardUrl(id), status: how === 'authorise' ? 'authorised' : 'charged' };
+          note(c, 'Payments', how === 'authorise' ? `Stripe authorised ${eur(centsOf(c))} without capturing it: ${id}` : `Stripe charged ${eur(centsOf(c))}, the purchase as it settled: ${id}`);
+          pushCase(c);
+          return id;
+        },
+        (e) => (failed(c, how === 'authorise' ? 'authorisation' : 'charge', e), null),
+      ),
+    );
+  };
+
+  const onOpened: SituationHandler = {
+    specification: when(({ event }) => event.type === 'purchase.pending' || event.type === 'dispute.opened'),
+    processor: {
+      apply(ctx) {
+        const c = state().cases.get(payloadOf<{ caseId: string }>(ctx).caseId);
+        if (c && !payments.has(c.id)) open(c, ctx.event.type === 'purchase.pending' ? 'authorise' : 'charge');
+      },
+    },
+  };
+
+  const onClosed: SituationHandler = {
+    specification: when(({ event }) => event.type === 'case.closed'),
+    processor: {
+      apply(ctx) {
+        const c = state().cases.get(payloadOf<{ caseId: string }>(ctx).caseId);
+        const pending = c && payments.get(c.id);
+        if (!c || !pending || finished.has(c.id)) return;
+        finished.add(c.id);
+        void pending.then(async (id) => {
+          if (!id || !c.payment) return;
+          const p = c.payment;
+          try {
+            if (c.status === 'released' && p.status === 'authorised') {
+              await gateway.capture(id);
+              p.status = 'captured';
+              note(c, 'Payments', `Stripe captured ${eur(centsOf(c))}: released to the merchant`);
+            } else if (c.status === 'blocked' && p.status === 'authorised') {
+              await gateway.cancel(id);
+              p.status = 'cancelled';
+              note(c, 'Payments', 'Stripe cancelled the authorisation: blocked, nothing was charged');
+            } else if (c.status === 'ruled' && p.status === 'charged') {
+              const refund = c.settlement?.find((l) => l.party === 'customer' && l.label === 'Refund to customer');
+              const cents = Math.round((refund?.amount ?? 0) * 100);
+              if (cents <= 0) {
+                note(c, 'Payments', 'no refund: the claim was denied, so the Stripe charge stands');
+              } else {
+                p.refund = await gateway.refund(id, cents);
+                p.status = 'refunded';
+                note(c, 'Payments', `Stripe refunded ${eur(cents)}, the Ledger's figure: ${p.refund}`);
+              }
+            } else if (p.status === 'authorised') {
+              p.status = 'left_authorised';
+              note(c, 'Payments', 'left the Stripe authorisation in place for manual review');
+            }
+            pushCase(c);
+          } catch (e) {
+            failed(c, 'settlement', e);
+          }
+        });
+      },
+    },
+  };
+  return codeParticipant('Payments', [onOpened, onClosed]);
+}
+
 // ───────────────────────── network (code) ─────────────────────────
 
 // Learns from rulings and shares what it learned. Every merchant runs its own
@@ -762,7 +852,7 @@ export interface Team {
   roster: { name: string; kind: 'llm' | 'code' | 'human' }[];
 }
 
-export function assembleTeam(): Team {
+export function assembleTeam(gateway?: PaymentGateway): Team {
   const bridge = createBridge();
   const intake = codeParticipant('Intake', []);
   const investigators = ROLES.map(createInvestigator);
@@ -773,9 +863,10 @@ export function assembleTeam(): Team {
   const ledger = createLedger();
   const network = createNetwork();
   const officer = createHuman({ name: 'Risk officer', capabilities: ['approves-rulings'], handlers: [] });
+  const payments = gateway ? createPayments(gateway) : null;
 
   // The bridge joins first so it has mapped a loop to its case before anyone else needs it.
-  for (const p of [bridge, intake, sentinel, ...investigators, verifier, moderator, arbiter, ledger, network, officer]) join(p);
+  for (const p of [bridge, intake, sentinel, ...investigators, verifier, moderator, arbiter, ledger, network, officer, ...(payments ? [payments] : [])]) join(p);
 
   return {
     intake,
@@ -790,6 +881,7 @@ export function assembleTeam(): Team {
       { name: 'Risk officer', kind: 'human' },
       { name: 'Ledger', kind: 'code' },
       { name: 'Network', kind: 'code' },
+      ...(payments ? [{ name: 'Payments', kind: 'code' as const }] : []),
       { name: 'Bridge', kind: 'code' },
     ],
   };

@@ -21,8 +21,8 @@ Every figure anyone reports is traceable to a sealed record.
 
 | Criterion | Points | What to look at |
 |---|---|---|
-| Useful | 30 | The track's own ideas, *investigate held payments* and *route payments beyond an agent's authority to a human approver*, applied to purchases made by AI agents: a risky payment is held, investigated, then blocked or released, and a disputed one is split between the parties at fault. Rulings on orders of €1,000 or more wait for a person. |
-| Multi-agent design on Mozaik | 30 | Thirteen participants in one runtime; nobody calls anybody ([The agents](#the-agents)). Four investigators wake on the same event and run in parallel: `npm run proof` measures the peak number of model calls at once (13 in a scripted run). Shared state is a `RuntimeState` subclass ([server/state.ts](server/state.ts)). Checks between agents: the Verifier sends back any finding whose citation does not match its record, the Moderator makes investigators who disagree answer each other, and `issue_ruling` refuses a share no finding supports. |
+| Useful | 30 | The track's own ideas, *investigate held payments* and *route payments beyond an agent's authority to a human approver*, applied to purchases made by AI agents: a risky payment is held, investigated, then blocked or released, and a disputed one is split between the parties at fault. Rulings on orders of €1,000 or more wait for a person. With a Stripe test key, each outcome happens to a real test payment: authorised, then captured, cancelled or refunded ([Stripe test mode](#stripe-test-mode)). |
+| Multi-agent design on Mozaik | 30 | Thirteen participants in one runtime (fourteen with Stripe); nobody calls anybody ([The agents](#the-agents)). Four investigators wake on the same event and run in parallel: `npm run proof` measures the peak number of model calls at once (13 in a scripted run). Shared state is a `RuntimeState` subclass ([server/state.ts](server/state.ts)). Checks between agents: the Verifier sends back any finding whose citation does not match its record, the Moderator makes investigators who disagree answer each other, and `issue_ruling` refuses a share no finding supports. |
 | It works | 25 | `npm install && npm run dev`, no API key needed. CI runs the typecheck, the test suite, the build and a full scripted eval on every push. On real models: Sonnet 4.6 12 of 12, Haiku 4.5 34 of 36 ([Results](#results)). |
 | Care with financial data | 15 | Every number an agent reports cites a field of a hash-sealed record, and code checks each one before the finding counts. No model produces a money amount: the Ledger computes them in whole cents and shows each formula and its source. The ground truth is never shown to an agent ([Care with financial data](#care-with-financial-data)). |
 
@@ -74,7 +74,7 @@ On the left: the owner's instruction, the customer's claim or why the payment wa
 
 ## The agents
 
-Thirteen participants share one Mozaik runtime. Nobody calls anybody: each declares the situations it reacts to.
+Thirteen participants share one Mozaik runtime, fourteen with a Stripe test key. Nobody calls anybody: each declares the situations it reacts to.
 
 | Participant | Kind | Wakes on | Does |
 |---|---|---|---|
@@ -90,6 +90,7 @@ Thirteen participants share one Mozaik runtime. Nobody calls anybody: each decla
 | Risk officer | human | — | Approves or rejects rulings on large orders |
 | Ledger | code | `ruling.issued` | Blocks or releases a hold; computes the money on a dispute; keeps the risk board |
 | Network | code | `case.closed` | Learns an attack's signature from a confirming ruling and shares it with every merchant; credits each catch to the signature that made it |
+| Payments | code | `purchase.pending`, `dispute.opened`, `case.closed` | Only with a Stripe test key: authorises a held payment, then captures or cancels it; charges a disputed purchase and refunds the Ledger's figure |
 | Bridge | code | everything | Streams events to the browser, measures concurrency |
 
 ### How they run concurrently
@@ -110,6 +111,20 @@ Thirteen participants share one Mozaik runtime. Nobody calls anybody: each decla
 - No model produces a money amount. The Arbiter outputs percentages; the Ledger computes `order total × share` in whole cents and shows the formula and its source next to each line ([server/agents/team.ts](server/agents/team.ts)). On a shared ruling the amounts recovered and absorbed always add up to the refund: the odd cent goes to the share that rounding cut the most.
 - Records are sealed in a hash chain when a case opens ([server/data/scenarios.ts](server/data/scenarios.ts)): each hash covers the record and the hash before it. The Verifier recomputes a record's hash before accepting any citation to it, and re-walks the chain each time.
 - The scenario's ground truth is kept apart from the evidence and is never given to an agent. It is shown only after a case closes. Cases with a hand-set limit have no ground truth and are not scored.
+
+## Stripe test mode
+
+Set `STRIPE_SECRET_KEY` to a Stripe **test** key (`sk_test_…`) in `.env`, and the Payments participant mirrors each case's money in Stripe:
+
+| What happens in Blackbox | What happens in Stripe |
+|---|---|
+| A payment is held for review | A PaymentIntent is authorised on Stripe's test card but not captured |
+| The team, or a known attack, blocks it | The authorisation is cancelled: nothing is charged |
+| It is released | It is captured: the money moves to the merchant |
+| A customer disputes a purchase | The purchase is charged as it settled |
+| The dispute is ruled | The refund the Ledger computed is refunded, to the cent; a denied claim refunds nothing |
+
+Each case's activity shows the Stripe ids, and every payment is in the [test dashboard](https://dashboard.stripe.com/test/payments) with the case id in its metadata. A live key is refused at startup (`isTestKey` in [server/payments/stripe.ts](server/payments/stripe.ts)), so the engine cannot move real money. A Stripe error is written to the case's log and never changes the ruling. Without a key, nothing calls Stripe and everything else works the same.
 
 ## Two modes
 
@@ -182,6 +197,7 @@ server/            Mozaik engine
   agents/network.ts  attack signatures: what the network learns and recognises
   agents/verify.ts   citation checking
   model/             scripted stand-in, the guarded runner, and local model servers
+  payments/stripe.ts Stripe test mode over its REST API
   data/              synthetic world and scenarios
 web/src/           React + three.js client
   views/Globe.tsx      the network as a globe

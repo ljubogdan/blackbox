@@ -24,6 +24,8 @@ export const config = {
   seed: num(env.SEED, 20261127),
   mode: (live ? 'live' : 'scripted') as 'live' | 'scripted',
   localBaseUrl: env.LOCAL_BASE_URL,
+  // A Stripe test key mirrors each case's money in Stripe test mode. Live keys are refused.
+  stripeKey: env.STRIPE_SECRET_KEY || undefined,
   investigatorModel: env.INVESTIGATOR_MODEL ?? models.investigator,
   arbiterModel: env.ARBITER_MODEL ?? models.arbiter,
   fallbackModels: list(env.FALLBACK_MODELS) ?? (provider ? (DEFAULT_FALLBACKS[provider] ?? []) : []),

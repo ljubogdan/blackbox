@@ -155,6 +155,8 @@ export interface CaseFile {
   settlement?: SettlementLine[];
   // Set when the payment matched an attack the network had already learned at another merchant.
   network?: { signature: string; label: string; sourceCaseId: string; sourceMerchant: string };
+  // The case's payment in Stripe test mode, when a test key is set.
+  payment?: { id: string; url: string; status: 'authorised' | 'charged' | 'captured' | 'cancelled' | 'refunded' | 'left_authorised' | 'failed'; refund?: string };
   // Scenario ground truth. Only attached once the case is closed, never shown to the agents.
   truth?: Record<Party, number>;
   log: { t: number; who: string; text: string }[];

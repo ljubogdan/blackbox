@@ -14,6 +14,7 @@ import { CATALOG, MERCHANTS, WIDGET_DOMAINS } from './data/world';
 import { GeminiSignatures } from './model/gemini';
 import { GuardedRunner } from './model/guard';
 import { localModels } from './model/local';
+import { isTestKey, stripeGateway } from './payments/stripe';
 import { ScriptedRunner } from './model/scripted';
 import { Rng } from './rng';
 import { initializeRuntime, publish, state } from './runtime';
@@ -43,7 +44,8 @@ const inner =
 const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, config.inferenceTimeoutMs, config.maxRpm, { fallbacks: config.fallbackModels });
 
 initializeRuntime({ state: new BlackboxState(), inferenceRunnerConfig: { runner } });
-const team = assembleTeam();
+if (config.stripeKey && !isTestKey(config.stripeKey)) console.error('STRIPE_SECRET_KEY is not a test key, so Stripe stays off: Blackbox never moves real money.');
+const team = assembleTeam(config.stripeKey && isTestKey(config.stripeKey) ? stripeGateway(config.stripeKey) : undefined);
 const rng = new Rng(config.seed);
 
 const info: EngineInfo = {
@@ -273,6 +275,7 @@ wss.on('connection', (ws) => {
 server.listen(config.port, () => {
   console.log(`Blackbox engine on http://localhost:${config.port}  ·  mode: ${info.mode}  ·  model: ${info.model}`);
   console.log(`Participants: ${team.roster.map((p) => `${p.name} (${p.kind})`).join(', ')}`);
+  if (team.roster.some((p) => p.name === 'Payments')) console.log('Stripe test mode: every case\'s money is mirrored at https://dashboard.stripe.com/test/payments');
   if (!config.stream) return;
   tickPurchase();
   setTimeout(() => openCase('injection', { stage: 'hold' }), 1800);
