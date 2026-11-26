@@ -1,5 +1,5 @@
 import type { CaseFile, Citation, CitationCheck, EvidenceKind, EvidenceRecord, Party, Role, Scalar, TamperResult } from '../../shared/types';
-import { ROLE_PARTY, ROLES } from '../../shared/types';
+import { PARTIES, ROLE_PARTY, ROLES } from '../../shared/types';
 import { recordHash, seal } from '../data/scenarios';
 
 // Plain code, no model: a cited value either matches the stored record or it does not.
@@ -57,12 +57,22 @@ export function missingCoverage(role: Role, caseId: string, citations: Citation[
 // hedge alone would stop a clean purchase.
 export const MATERIAL = 20;
 
-// Parties a split gives a share to without a verified finding that implicates them. The customer
-// is the residual party (a claim that fails lands on them), so only the other three are checked.
+// The parties the verified findings implicate: those a finding puts at least MATERIAL on. On a held
+// payment nobody examines a claim, so the customer is the residual party (a share there means "let
+// it through"). On a dispute the Claim Examiner speaks for the customer like any other investigator.
+export function implicated(c: CaseFile): Party[] {
+  return PARTIES.filter((party) => {
+    const role = ROLES.find((r) => ROLE_PARTY[r] === party)!;
+    const finding = c.investigators[role].finding;
+    if (party === 'customer' && !finding) return true;
+    return (finding?.liability ?? 0) >= MATERIAL;
+  });
+}
+
+// Parties a split gives a share to without a verified finding that implicates them.
 export function unsupportedShares(c: CaseFile, split: Record<Party, number>): Party[] {
-  return ROLES.filter((role) => role !== 'intent')
-    .filter((role) => split[ROLE_PARTY[role]] > 0 && (c.investigators[role].finding?.liability ?? 0) < MATERIAL)
-    .map((role) => ROLE_PARTY[role]);
+  const ok = implicated(c);
+  return PARTIES.filter((p) => split[p] > 0 && !ok.includes(p));
 }
 
 // Change one field of one record on a copy of the case's records, and run the same checks the

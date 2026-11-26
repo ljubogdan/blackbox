@@ -65,7 +65,7 @@ export const ARBITER_INSTRUCTION = [
   `- The split is four whole-number percentages that sum to exactly 100.`,
   `- "fraud" means a third party used the agent without authority; the guarantee absorbs that share.`,
   `- If no other party is implicated, the customer's claim fails and customer is 100.`,
-  `- A party gets a share only if a verified finding puts at least ${MATERIAL}/100 on it. Below that the evidence clears them, and their share is 0: do not hedge with small shares. issue_ruling refuses a split that breaks this.`,
+  `- A party gets a share only if a verified finding puts at least ${MATERIAL}/100 on it. Below that the evidence clears them, and their share is 0: do not hedge with small shares. On a dispute this includes the customer: the Claim Examiner's figure is the customer's. issue_ruling refuses a split that breaks this. If no finding implicates anyone, the findings contradict each other: still call issue_ruling with your best split, and the case goes to a person.`,
   `- Do not state any money amounts. Amounts are computed in code from the order record.`,
   ``,
   `Call issue_ruling once with: case_id, split, reason_code (one of AGENT_OUTSIDE_MANDATE, MERCHANT_DATA_FAILURE, UNAUTHORISED_SESSION, CLAIM_NOT_SUPPORTED, SHARED_FAULT, or NO_FAULT_FOUND for a held payment that should be released) and a rationale of at most 80 words.`,
@@ -81,6 +81,9 @@ export function challengeBrief(c: CaseFile, target: Role): string {
     ``,
     `Their finding: liability ${theirs.liability}/100 on ${theirs.party}. ${theirs.summary}`,
     `CHALLENGE_JSON: ${JSON.stringify(theirs)}`,
+    ``,
+    `Your figure is about ${PARTY_NAME[ROLE_PARTY[target]]} only; theirs is about ${PARTY_NAME[theirs.party]}. They answer different questions, so they do not need to match, and both can be high at once.`,
+    `Revise only if their evidence changes how much of the loss falls on ${PARTY_NAME[ROLE_PARTY[target]]}. Lowering your figure says the records clear ${PARTY_NAME[ROLE_PARTY[target]]}: keep it high if your own records still show that party at fault.`,
     ``,
     `Answer with respond_to_challenge.`,
   ].join('\n');

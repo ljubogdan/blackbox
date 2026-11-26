@@ -1,6 +1,6 @@
 import type { Tool } from '@mozaik-ai/core';
 import type { Citation, Party, Role, Ruling } from '../../shared/types';
-import { checkCitations, MATERIAL, unsupportedShares } from './verify';
+import { checkCitations, implicated, MATERIAL, unsupportedShares } from './verify';
 import { PARTIES, ROLE_NAME, ROLE_PARTY } from '../../shared/types';
 import { note, publish, pushCase, state } from '../runtime';
 
@@ -105,7 +105,7 @@ export function respondToChallengeTool(role: Role, agentId: () => string): Tool 
       properties: {
         case_id: { type: 'string' },
         stance: { type: 'string', enum: ['maintain', 'revise'] },
-        liability: { type: 'number', description: '0-100, your figure after considering the challenge' },
+        liability: { type: 'number', description: '0-100, your figure for your own party after considering the challenge, not the challenger\'s party' },
         reasoning: { type: 'string' },
         citations: {
           type: 'array',
@@ -179,9 +179,20 @@ export function issueRulingTool(agentId: () => string): Tool {
       const valid = PARTIES.every((p) => Number.isInteger(split[p]) && split[p] >= 0);
       const sum = PARTIES.reduce((s, p) => s + split[p], 0);
       if (!valid || sum !== 100) return `Error: split must be four whole numbers that sum to 100 (got ${sum}).`;
+      // Every finding clears its party, the customer's included: the findings contradict each other
+      // (a claim that holds, with nobody at fault). No split fits that, so a person decides.
+      if (implicated(c).length === 0 && !state().rejected.has(c.id)) {
+        c.arbiter = { status: 'failed' };
+        c.status = 'manual_review';
+        c.closedAt = Date.now();
+        note(c, 'Arbiter', `the findings contradict each other: none puts ${MATERIAL}/100 on any party, the customer included; case moved to manual review`);
+        pushCase(c);
+        publish('case.closed', agentId(), { caseId: c.id });
+        return 'The verified findings implicate no party, the customer included, so they contradict each other. The case has moved to manual review; no ruling is recorded.';
+      }
       const unsupported = unsupportedShares(c, split);
       if (unsupported.length > 0)
-        return `Error: no verified finding puts at least ${MATERIAL}/100 on ${unsupported.join(', ')}, so their share must be 0. Move it to the parties the findings implicate (or to customer if none) and call issue_ruling again.`;
+        return `Error: no verified finding puts at least ${MATERIAL}/100 on ${unsupported.join(', ')}, so their share must be 0. Move it to the parties the findings implicate and call issue_ruling again.`;
       const ruling: Ruling = { split, reason_code: String(args.reason_code), rationale: String(args.rationale ?? '').slice(0, 900) };
       if (state().rejected.has(c.id)) {
         c.arbiter = { status: 'failed' }; // the rejected proposal is not kept as a ruling
