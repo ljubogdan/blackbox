@@ -502,7 +502,7 @@ export function settle(c: CaseFile, ruling: Ruling): SettlementLine[] {
     fraud: 'Absorbed by the guarantee',
   };
   return [
-    { label: refundPct > 0 ? 'Refund to customer' : 'Claim denied — no refund', party: 'customer', formula: f(refundPct), amount: refund / 100, source },
+    { label: refundPct > 0 ? 'Refund to customer' : 'Claim denied, no refund', party: 'customer', formula: f(refundPct), amount: refund / 100, source },
     ...payers.map((p): SettlementLine => ({ label: label[p], party: p === 'fraud' ? 'guarantee' : p, formula: f(ruling.split[p]), amount: owed.get(p)! / 100, source })),
   ];
 }
@@ -564,7 +564,7 @@ function createLedger(): Agent {
           c.status = block ? 'blocked' : 'released';
           c.settlement = [
             {
-              label: block ? 'Blocked before settlement — loss prevented' : 'Released to the merchant',
+              label: block ? 'Blocked before settlement, loss prevented' : 'Released to the merchant',
               party: block ? 'customer' : 'merchant',
               formula: `€${total.toFixed(2)} × 100%`,
               amount: total,

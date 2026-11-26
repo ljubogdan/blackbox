@@ -1,6 +1,5 @@
 import { OrbitControls } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -8,7 +7,7 @@ import { feature } from 'topojson-client';
 import type { Topology } from 'topojson-specification';
 import land from 'world-atlas/land-110m.json';
 import { MERCHANTS } from '../../../shared/types';
-import { BG, BREACH, eur, INK, useStore } from '../store';
+import { BG, BREACH, DIVE_MS, eur, INK, reducedMotion, useStore } from '../store';
 import { Label, LabelLayer, Projector, useAnchor } from './labels';
 
 // The network as a planet. Every merchant runs its own Blackbox in its own city.
@@ -50,11 +49,22 @@ const hitAt = new Float64Array(N).fill(-1e9);
 
 // ───────────────────────── the planet ─────────────────────────
 
-// Land as a field of dots: the coastlines are drawn once onto a small map, and
-// evenly spread points on the sphere keep only the ones that fall on land.
-function landDots(): Float32Array {
-  const W = 1024;
-  const H = 512;
+// The land, painted onto a world map (longitude across, latitude down) with softened coasts, and
+// wrapped onto the planet by the ocean shader.
+// Drawn once per page and kept: the globe is mounted again every time a case is closed.
+let landCanvas: HTMLCanvasElement | null = null;
+
+function landMap(): THREE.CanvasTexture {
+  landCanvas ??= paintLand();
+  const map = new THREE.CanvasTexture(landCanvas);
+  map.anisotropy = 8;
+  map.colorSpace = THREE.NoColorSpace; // a mask, not a colour
+  return map;
+}
+
+function paintLand(): HTMLCanvasElement {
+  const W = 2048;
+  const H = 1024;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -85,61 +95,76 @@ function landDots(): Float32Array {
         ctx.fill('evenodd');
       }
   }
-  const mask = ctx.getImageData(0, 0, W, H).data;
-  const out: number[] = [];
-  const total = 42000;
-  const golden = Math.PI * (3 - Math.sqrt(5));
-  const p = new THREE.Vector3();
-  for (let i = 0; i < total; i++) {
-    const y = 1 - (i / (total - 1)) * 2;
-    const lat = Math.asin(y) / DEG;
-    const lon = ((((i * golden) / DEG) % 360) + 360) % 360 - 180;
-    const px = Math.min(W - 1, Math.floor(((lon + 180) / 360) * W));
-    const py = Math.min(H - 1, Math.floor(((90 - lat) / 180) * H));
-    if (mask[(py * W + px) * 4] < 128) continue;
-    onGlobe(lat, lon, R * 1.001, p);
-    out.push(p.x, p.y, p.z);
-  }
-  return new Float32Array(out);
+  // Soften the coasts in one pass over the finished map; blurring each polygon as it is drawn costs
+  // a blur of the whole canvas per polygon.
+  const soft = document.createElement('canvas');
+  soft.width = W;
+  soft.height = H;
+  const sctx = soft.getContext('2d')!;
+  sctx.filter = 'blur(1.6px)';
+  sctx.drawImage(canvas, 0, 0);
+  return soft;
 }
 
-const dotShader = {
-  uniforms: { uSize: { value: 1 } },
+// One key light for the planet, kept up and to the left of wherever the camera is, so the globe
+// always has a lit side, a terminator and a night side. Shared by every material that shades.
+const SUN = { value: new THREE.Vector3(-0.5, 0.5, 0.7).normalize() };
+
+// The surface: land from the map, a shade lighter than the sea; both lit by the one light, a glint
+// of it on the water, and the blue of the air thickening towards the edge.
+const oceanShader = {
+  uniforms: { uLight: SUN, uLand: { value: null as THREE.Texture | null } },
   vertexShader: /* glsl */ `
-    uniform float uSize;
-    varying float vFacing;
+    varying vec3 vWorld;
     void main() {
-      vec4 mv = modelViewMatrix * vec4(position, 1.0);
-      vFacing = dot(normalize(normalMatrix * normalize(position)), normalize(-mv.xyz));
-      gl_PointSize = uSize * (19.0 / -mv.z);
-      gl_Position = projectionMatrix * mv;
+      vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+      gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
     }`,
   fragmentShader: /* glsl */ `
-    varying float vFacing;
+    uniform vec3 uLight;
+    uniform sampler2D uLand;
+    varying vec3 vWorld;
+    const float PI = 3.141592653589793;
     void main() {
-      vec2 c = gl_PointCoord - 0.5;
-      if (dot(c, c) > 0.25) discard;
-      gl_FragColor = vec4(0.46, 0.48, 0.52, 0.85 * smoothstep(0.0, 0.45, vFacing));
+      vec3 n = normalize(vWorld);
+      vec3 v = normalize(cameraPosition - vWorld);
+      float day = max(dot(n, uLight), 0.0);
+      float edge = pow(clamp(1.0 - dot(n, v), 0.0, 1.0), 3.0);
+      // where on the map this point is: the inverse of onGlobe()
+      float theta = atan(n.z, -n.x);
+      vec2 uv = vec2(fract(theta / (2.0 * PI)), 1.0 - acos(clamp(n.y, -1.0, 1.0)) / PI);
+      float land = texture2D(uLand, uv).r;
+      vec3 sea = mix(vec3(0.01, 0.013, 0.024), vec3(0.03, 0.05, 0.09), day);
+      vec3 ground = mix(vec3(0.07, 0.08, 0.1), vec3(0.42, 0.44, 0.48), smoothstep(-0.1, 0.9, dot(n, uLight)));
+      vec3 col = mix(sea, ground, land);
+      col += vec3(0.32, 0.52, 0.95) * edge * (0.03 + 0.12 * day);
+      float glint = pow(clamp(dot(n, normalize(uLight + v)), 0.0, 1.0), 160.0);
+      col += vec3(0.75, 0.85, 1.0) * glint * 0.22 * (1.0 - land); // only the water shines
+      gl_FragColor = vec4(col, 1.0);
     }`,
 };
 
-// A faint rim of light around the planet.
-const rimShader = {
+// The air around the planet: a halo just outside its edge, brightest on the lit side.
+const airShader = {
+  uniforms: { uLight: SUN },
   vertexShader: /* glsl */ `
     varying vec3 vNormal;
-    varying vec3 vView;
+    varying vec3 vWorld;
     void main() {
-      vec4 mv = modelViewMatrix * vec4(position, 1.0);
       vNormal = normalize(normalMatrix * normal);
-      vView = normalize(-mv.xyz);
-      gl_Position = projectionMatrix * mv;
+      vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }`,
   fragmentShader: /* glsl */ `
+    uniform vec3 uLight;
     varying vec3 vNormal;
-    varying vec3 vView;
+    varying vec3 vWorld;
     void main() {
-      float rim = pow(1.0 - abs(dot(vNormal, vView)), 4.0);
-      gl_FragColor = vec4(vec3(0.75, 0.8, 0.9), rim * 0.22);
+      // strongest right at the planet's edge, gone by the outside of the shell
+      float halo = pow(clamp(0.6 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 9.0);
+      float lit = 0.25 + 0.75 * smoothstep(-0.4, 0.8, dot(normalize(vWorld), uLight));
+      vec3 col = mix(vec3(0.3, 0.5, 1.0), vec3(0.8, 0.88, 1.0), 0.3);
+      gl_FragColor = vec4(col * halo * lit * 0.14, 1.0);
     }`,
 };
 
@@ -173,7 +198,8 @@ const waveShader = {
         if (front > 3.3) continue;
         float ang = acos(clamp(dot(vDir, uDir[i]), -1.0, 1.0));
         float fade = 1.0 - smoothstep(2.4, 3.2, front);
-        float band = 0.55 * exp(-pow((ang - front) / 0.028, 2.0));
+        float x = (ang - front) / 0.028;
+        float band = 0.55 * exp(-x * x); // x*x, not pow(x, 2.0): pow of a negative base is NaN
         float wake = step(ang, front) * 0.07 * exp(-(front - ang) * 2.5);
         glow += (band + wake) * fade;
       }
@@ -183,17 +209,19 @@ const waveShader = {
 };
 
 function Planet() {
-  const dots = useMemo(() => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(landDots(), 3));
-    return g;
-  }, []);
-  const dotMat = useRef<THREE.ShaderMaterial>(null!);
-  const dpr = useThree((s) => s.viewport.dpr);
-  const { size } = useThree();
-  useEffect(() => {
-    dotMat.current.uniforms.uSize.value = dpr * (size.height / 800) * 1.15;
-  }, [dpr, size.height]);
+  const surface = useMemo(() => ({ ...oceanShader, uniforms: { ...oceanShader.uniforms, uLand: { value: landMap() } } }), []);
+  useEffect(() => () => surface.uniforms.uLand.value.dispose(), [surface]); // a texture in a uniform is not freed with the material
+
+  // The light stays up and to the left of the camera as the planet turns.
+  const fwd = useMemo(() => new THREE.Vector3(), []);
+  const right = useMemo(() => new THREE.Vector3(), []);
+  const up = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera }) => {
+    fwd.copy(camera.position).normalize();
+    right.crossVectors(camera.up, fwd).normalize();
+    up.crossVectors(fwd, right);
+    SUN.value.copy(fwd).multiplyScalar(0.55).addScaledVector(right, -0.62).addScaledVector(up, 0.56).normalize();
+  });
 
   // Lines of latitude and longitude, barely there.
   const grid = useMemo(() => {
@@ -220,18 +248,15 @@ function Planet() {
   return (
     <>
       <mesh>
-        <sphereGeometry args={[R * 0.998, 96, 96]} />
-        <meshBasicMaterial color="#0b0b0e" />
+        <sphereGeometry args={[R * 0.998, 128, 128]} />
+        <shaderMaterial args={[surface]} />
       </mesh>
       <lineSegments geometry={grid}>
-        <lineBasicMaterial color="#ffffff" transparent opacity={0.045} depthWrite={false} />
+        <lineBasicMaterial color="#9fb6ff" transparent opacity={0.035} depthWrite={false} />
       </lineSegments>
-      <points geometry={dots}>
-        <shaderMaterial ref={dotMat} args={[dotShader]} transparent depthWrite={false} />
-      </points>
       <mesh scale={1.05}>
-        <sphereGeometry args={[R, 64, 64]} />
-        <shaderMaterial args={[rimShader]} transparent depthWrite={false} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
+        <sphereGeometry args={[R, 96, 96]} />
+        <shaderMaterial args={[airShader]} transparent depthWrite={false} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
       </mesh>
     </>
   );
@@ -293,6 +318,36 @@ function Stars() {
   );
 }
 
+// A cool haze behind the planet, as if its air lit the dark around it. A disc that always faces the
+// camera, drawn first and behind everything.
+const hazeShader = {
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      float d = distance(vUv, vec2(0.5)) * 2.0;
+      float a = pow(max(1.0 - d, 0.0), 2.4);
+      gl_FragColor = vec4(vec3(0.16, 0.24, 0.48) * a * 0.16, 1.0);
+    }`,
+};
+
+function Haze() {
+  const mesh = useRef<THREE.Mesh>(null!);
+  useFrame(({ camera }) => mesh.current.quaternion.copy(camera.quaternion));
+  return (
+    <mesh ref={mesh} renderOrder={-1}>
+      <planeGeometry args={[R * 7, R * 7]} />
+      {/* not marked transparent, so it is drawn with the solid things, first; the planet then covers it */}
+      <shaderMaterial args={[hazeShader]} depthTest={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+    </mesh>
+  );
+}
+
 // ───────────────────────── merchants ─────────────────────────
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -300,12 +355,33 @@ const BASE = new THREE.Color('#e9e9e6');
 const RED = new THREE.Color(BREACH);
 const WHITE = new THREE.Color('#ffffff');
 
+// A beacon of light over each city, brightest at the ground and gone at the top.
+const beamShader = {
+  uniforms: { uColor: { value: new THREE.Color('#ffffff') }, uLevel: { value: 1 } },
+  vertexShader: /* glsl */ `
+    varying float vY;
+    void main() {
+      vY = uv.y;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uColor;
+    uniform float uLevel;
+    varying float vY;
+    void main() {
+      float a = pow(clamp(1.0 - vY, 0.0, 1.0), 1.8); // clamped: pow of a base below 0 is NaN
+      gl_FragColor = vec4(uColor * uLevel, a);
+    }`,
+};
+
 function City({ i, signatures, open }: { i: number; signatures: number; open: number }) {
   const name = MERCHANTS[i].name;
   const focus = useStore((s) => s.focus);
   const focusCity = useStore((s) => s.focusCity);
   const [over, setOver] = useState(false);
-  const beam = useRef<THREE.MeshBasicMaterial>(null!);
+  const beam = useRef<THREE.ShaderMaterial>(null!);
+  const beamMat = useMemo(() => ({ ...beamShader, uniforms: THREE.UniformsUtils.clone(beamShader.uniforms) }), []); // its own, not shared
+  const ripple = useRef<THREE.Mesh>(null!);
   const ring = useRef<THREE.Mesh>(null!);
   const ringMat = useRef<THREE.MeshBasicMaterial>(null!);
   const shield = useRef<THREE.ShaderMaterial>(null!);
@@ -338,7 +414,7 @@ function City({ i, signatures, open }: { i: number; signatures: number; open: nu
         varying vec3 vView;
         varying float vY;
         void main() {
-          float rim = pow(1.0 - abs(dot(vNormal, vView)), 2.0);
+          float rim = pow(clamp(1.0 - abs(dot(vNormal, vView)), 0.0, 1.0), 2.0);
           float bands = 0.5 + 0.5 * sin(vY * 200.0);
           gl_FragColor = vec4(uColor, uLevel * (0.25 + rim * 0.9) * (0.75 + 0.25 * bands));
         }`,
@@ -353,8 +429,15 @@ function City({ i, signatures, open }: { i: number; signatures: number; open: nu
     const hit = Math.exp(-(now - hitAt[i]) / 1100);
     const chosen = focus === name;
     tint.copy(BASE).lerp(WHITE, Math.max(arrived, raised)).lerp(RED, hit);
-    beam.current.color.copy(tint);
-    beam.current.opacity = 0.55 + 0.45 * Math.max(arrived, hit, over || chosen ? 1 : 0);
+    (beam.current.uniforms.uColor.value as THREE.Color).copy(tint);
+    beam.current.uniforms.uLevel.value = 0.75 + 1.6 * Math.max(arrived, hit, over || chosen ? 0.7 : 0);
+    // where a purchase lands, a ring runs out over the ground
+    const landed = (now - arrivedAt[i]) / 900;
+    ripple.current.visible = landed >= 0 && landed < 1;
+    if (ripple.current.visible) {
+      ripple.current.scale.setScalar(0.5 + landed * 2.6);
+      (ripple.current.material as THREE.MeshBasicMaterial).opacity = 0.75 * (1 - landed) * (1 - landed);
+    }
     // A city with cases open pulses.
     const pulse = open > 0 ? (clock.elapsedTime * 0.8 + i * 0.13) % 1 : 1;
     ring.current.scale.setScalar(0.6 + pulse * 1.6);
@@ -366,11 +449,6 @@ function City({ i, signatures, open }: { i: number; signatures: number; open: nu
 
   return (
     <group position={CITY[i]} quaternion={turn}>
-      {/* a dark clearing in the land dots, so a city never reads as one more dot */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, 0]}>
-        <circleGeometry args={[0.075, 32]} />
-        <meshBasicMaterial color={BG} />
-      </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]}>
         <ringGeometry args={[0.058, 0.066, 48]} />
         <meshBasicMaterial color={INK} transparent opacity={0.75} toneMapped={false} />
@@ -381,7 +459,11 @@ function City({ i, signatures, open }: { i: number; signatures: number; open: nu
       </mesh>
       <mesh position={[0, 0.21, 0]}>
         <cylinderGeometry args={[0.0035, 0.009, 0.42, 8]} />
-        <meshBasicMaterial ref={beam} transparent toneMapped={false} depthWrite={false} />
+        <shaderMaterial ref={beam} args={[beamMat]} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+      </mesh>
+      <mesh ref={ripple} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.007, 0]} visible={false}>
+        <ringGeometry args={[0.07, 0.082, 48]} />
+        <meshBasicMaterial color={[1.6, 1.6, 1.6]} transparent opacity={0} toneMapped={false} depthWrite={false} />
       </mesh>
       <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]}>
         <ringGeometry args={[0.07, 0.078, 40]} />
@@ -439,10 +521,9 @@ function arcPoints(a: THREE.Vector3, b: THREE.Vector3, segments = 64, lift = 1) 
 const cometShader = {
   uniforms: { uHead: { value: 0 }, uColor: { value: new THREE.Color() }, uFade: { value: 1 }, uTail: { value: 0.32 } },
   vertexShader: /* glsl */ `
-    attribute float t;
     varying float vT;
     void main() {
-      vT = t;
+      vT = uv.x; // along the tube
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }`,
   fragmentShader: /* glsl */ `
@@ -454,12 +535,13 @@ const cometShader = {
     void main() {
       if (vT > uHead) discard;
       float a = smoothstep(uHead - uTail, uHead, vT);
-      gl_FragColor = vec4(uColor, a * uFade);
+      float hot = smoothstep(uHead - 0.06, uHead, vT); // white-hot just behind the head
+      gl_FragColor = vec4(uColor * (0.9 + 2.2 * hot), a * uFade);
     }`,
 };
 
 interface Flight {
-  line: THREE.Line;
+  line: THREE.Mesh;
   head: THREE.Vector3[];
   start: number;
   ms: number;
@@ -467,16 +549,22 @@ interface Flight {
   to: number; // city it lands in, or -1
 }
 
-function flight(pts: THREE.Vector3[], color: THREE.Color, start: number, ms: number, opts: { tail?: number; hold?: number; to?: number } = {}): Flight {
-  const g = new THREE.BufferGeometry().setFromPoints(pts);
-  g.setAttribute('t', new THREE.Float32BufferAttribute(pts.map((_, k) => k / (pts.length - 1)), 1));
-  const mat = new THREE.ShaderMaterial({ ...cometShader, uniforms: THREE.UniformsUtils.clone(cometShader.uniforms), transparent: true, depthWrite: false, toneMapped: false });
+function flight(pts: THREE.Vector3[], color: THREE.Color, start: number, ms: number, opts: { tail?: number; hold?: number; to?: number; width?: number } = {}): Flight {
+  const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length - 1, opts.width ?? 0.0045, 5, false);
+  const mat = new THREE.ShaderMaterial({
+    ...cometShader,
+    uniforms: THREE.UniformsUtils.clone(cometShader.uniforms),
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+  });
   mat.uniforms.uColor.value.copy(color);
   mat.uniforms.uTail.value = opts.tail ?? 0.32;
-  return { line: new THREE.Line(g, mat), head: pts, start, ms, hold: opts.hold ?? 0, to: opts.to ?? -1 };
+  return { line: new THREE.Mesh(g, mat), head: pts, start, ms, hold: opts.hold ?? 0, to: opts.to ?? -1 };
 }
 
-const PURCHASE = new THREE.Color('#9a9a97');
+const PURCHASE = new THREE.Color('#8f99b3');
 const HELD = new THREE.Color('#ffffff');
 const KNOWLEDGE = new THREE.Color(INK);
 
@@ -500,13 +588,21 @@ function Traffic() {
     const now = performance.now();
     const st = useStore.getState();
 
+
+
     for (const a of st.arcs) {
       if (seen.current.has(a.id) || now - a.seenAt > 1500) continue;
       seen.current.add(a.id);
       const to = indexOf(a.merchant.name);
       if (to < 0) continue;
       const from = onGlobe(a.buyer.lat, a.buyer.lon);
-      const f = flight(arcPoints(from, CITY[to], 48, 0.8), a.held || a.caseId ? HELD : PURCHASE, Math.max(a.seenAt, now - 200), 1500, { to, tail: 0.4 });
+      // A buyer in the merchant's own city has no path to fly (a tube of no length comes out as NaNs),
+      // so the city just lights up.
+      if (from.angleTo(CITY[to]) < 0.02) {
+        arrivedAt[to] = now;
+        continue;
+      }
+      const f = flight(arcPoints(from, CITY[to], 48, 0.8), a.held || a.caseId ? HELD : PURCHASE, Math.max(a.seenAt, now - 200), 1500, { to, tail: 0.4, width: a.held || a.caseId ? 0.0065 : 0.0042 });
       group.current.add(f.line);
       flights.current.push(f);
     }
@@ -518,7 +614,7 @@ function Traffic() {
       if (to < 0 || c.at < mounted - 4000) continue;
       hitAt[to] = c.at;
       if (from >= 0 && from !== to) {
-        const f = flight(arcPoints(CITY[from], CITY[to], 80, 1.25), KNOWLEDGE, c.at, 900, { tail: 1, hold: 1600 });
+        const f = flight(arcPoints(CITY[from], CITY[to], 80, 1.25), KNOWLEDGE, c.at, 900, { tail: 1, hold: 1600, width: 0.01 });
         group.current.add(f.line);
         flights.current.push(f);
       }
@@ -550,7 +646,7 @@ function Traffic() {
         const p = f.head[Math.min(f.head.length - 1, Math.round(head * (f.head.length - 1)))];
         m.compose(p, q, s.setScalar(f.to >= 0 ? 1 : 1.6));
         heads.current.setMatrixAt(n, m);
-        heads.current.setColorAt(n, color.copy(mat.uniforms.uColor.value));
+        heads.current.setColorAt(n, color.copy(mat.uniforms.uColor.value).multiplyScalar(2.6));
         n++;
       }
       if (k >= 1 && f.to >= 0 && arrivedAt[f.to] < f.start + f.ms) arrivedAt[f.to] = f.start + f.ms;
@@ -585,7 +681,7 @@ function Traffic() {
     <>
       <group ref={group} />
       <instancedMesh ref={heads} args={[undefined, undefined, 64]} frustumCulled={false}>
-        <sphereGeometry args={[0.016, 10, 10]} />
+        <sphereGeometry args={[0.014, 12, 12]} />
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>
       <mesh scale={1.004}>
@@ -612,7 +708,9 @@ function Rig() {
   const seenCatches = useRef(useStore.getState().catches.length);
   const seenWaves = useRef(useStore.getState().waves.length);
   const lastTurn = useRef(-1e9);
-  const intro = useRef<number | null>(null); // when the first frame was drawn: a hidden tab draws none
+  const dive = useRef<{ from: THREE.Vector3; start: number } | null>(null);
+  const intro = useRef<number | null>(null);
+  const startLen = useRef(DISTANCE); // when the first frame was drawn: a hidden tab draws none
 
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
@@ -646,8 +744,29 @@ function Rig() {
   useFrame(() => {
     const now = performance.now();
     const st = useStore.getState();
+    // Opening a case: fly down into its merchant's city, faster and faster, and the case takes over.
+    if (st.entering) {
+      const i = indexOf(st.cases[st.entering.caseId]?.purchase.merchant.name ?? '');
+      if (i >= 0) {
+        dive.current ??= { from: camera.position.clone(), start: now };
+        const k = reducedMotion() ? 1 : Math.min(1, (now - dive.current.start) / DIVE_MS);
+        const e = k * k * k;
+        const len = THREE.MathUtils.lerp(dive.current.from.length(), R * 1.18, e);
+        camera.position.copy(dive.current.from).normalize().lerp(CITY_DIR[i], Math.min(1, k * 1.6)).normalize().multiplyScalar(len);
+        camera.lookAt(0, 0, 0);
+        if (controls) {
+          controls.enabled = false;
+          controls.autoRotate = false;
+        }
+        return;
+      }
+    } else if (dive.current) {
+      dive.current = null;
+      if (controls) controls.enabled = true;
+    }
+
     // At most one turn every twelve seconds, and none to a city already in view.
-    const idle = now - touched.current > 9000 && now - lastTurn.current > 12000 && !st.focus && !glide.current;
+    const idle = now - touched.current > 9000 && now - lastTurn.current > 12000 && !st.focus && !glide.current && !reducedMotion();
     const c = st.catches.length > seenCatches.current ? st.catches.at(-1) : undefined;
     const w = st.waves.length > seenWaves.current ? st.waves.at(-1) : undefined;
     const i = indexOf(c?.merchant ?? w?.merchant ?? '');
@@ -658,24 +777,28 @@ function Rig() {
     seenCatches.current = st.catches.length;
     seenWaves.current = st.waves.length;
 
-    // The first seconds: the planet comes in from far away, and always ends at the same distance.
-    intro.current ??= now;
+    // The first seconds: the planet comes in from far away, or, back from a case, the camera pulls
+    // out of that case's city. Either way it ends at the same distance.
+    if (intro.current === null) {
+      intro.current = now;
+      startLen.current = camera.position.length();
+    }
     if (intro.current > 0) {
-      const k = Math.min(1, (now - intro.current) / 3200);
-      camera.position.setLength(DISTANCE * (1 + 0.7 * Math.pow(1 - k, 3)));
+      const k = reducedMotion() ? 1 : Math.min(1, (now - intro.current) / (startLen.current < DISTANCE ? 1400 : 3200));
+      camera.position.setLength(THREE.MathUtils.lerp(startLen.current, DISTANCE, 1 - Math.pow(1 - k, 3)));
       if (k >= 1) intro.current = -1;
     }
 
     if (glide.current) {
       const g = glide.current;
-      const t = Math.min(1, (now - g.start) / g.ms);
+      const t = reducedMotion() ? 1 : Math.min(1, (now - g.start) / g.ms);
       const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       const len = camera.position.length();
       camera.position.copy(g.from).normalize().lerp(g.to.clone().normalize(), e).setLength(len);
       camera.lookAt(0, 0, 0);
       if (t >= 1) glide.current = null;
     }
-    if (controls) controls.autoRotate = !glide.current && !st.focus && now - touched.current > 6000;
+    if (controls) controls.autoRotate = !glide.current && !st.focus && now - touched.current > 6000 && !reducedMotion();
   });
   return null;
 }
@@ -734,26 +857,27 @@ export function GlobeScene() {
     }
     return out;
   }, [cases]);
-  // Start over Europe, where most of the merchants are.
-  const start = useMemo(() => onGlobe(38, 10, DISTANCE).addScaledVector(UP, 1.2).setLength(DISTANCE * 1.7), []);
+  // Start over Europe, where most of the merchants are; back from a case, just above its merchant's city.
+  const start = useMemo(() => {
+    const st = useStore.getState();
+    const i = indexOf((st.selected && st.cases[st.selected]?.purchase.merchant.name) || '');
+    return i >= 0 ? CITY_DIR[i].clone().multiplyScalar(R * 1.3) : onGlobe(38, 10, DISTANCE).addScaledVector(UP, 1.2).setLength(DISTANCE * 1.7);
+  }, []);
 
   return (
     <>
-      <Canvas camera={{ position: start.toArray(), fov: 32, near: 0.1, far: 200 }} dpr={[1, 2]} gl={{ antialias: true }}>
+      <Canvas camera={{ position: start.toArray(), fov: 32, near: 0.1, far: 200 }} dpr={[1, 1.5]} gl={{ antialias: true }}>
         <color attach="background" args={[BG]} />
         <Rig />
         <Projector />
         <Stars />
+        <Haze />
         <Planet />
         {MERCHANTS.map((m, i) => (
           <City key={m.name} i={i} signatures={signatures} open={counts[i].open} />
         ))}
         <Traffic />
-        <OrbitControls makeDefault enablePan={false} enableZoom minDistance={5.5} maxDistance={18} autoRotateSpeed={0.35} enableDamping dampingFactor={0.08} rotateSpeed={0.45} />
-        <EffectComposer>
-          <Bloom intensity={0.8} luminanceThreshold={0.3} luminanceSmoothing={0.5} mipmapBlur />
-          <Vignette eskil={false} offset={0.3} darkness={0.75} />
-        </EffectComposer>
+        <OrbitControls makeDefault enablePan={false} enableZoom minDistance={2.6} maxDistance={18} autoRotateSpeed={0.35} enableDamping dampingFactor={0.08} rotateSpeed={0.45} />
       </Canvas>
       <CityLabels counts={counts} />
     </>

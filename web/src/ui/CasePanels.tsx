@@ -3,7 +3,7 @@ import type { CaseFile, CitationCheck, EvidenceRecord, Role } from '../../../sha
 import { PARTIES, PARTY_NAME, ROLE_NAME, ROLE_PARTY, ROLES } from '../../../shared/types';
 import { useEffect, useState } from 'react';
 import { downloadPack } from '../pack';
-import { caseBox, eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore, type Lens } from '../store';
+import { caseBox, dockOpen, eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore, type Lens } from '../store';
 import { CaseState } from './State';
 
 const QUESTION: Record<Role, string> = {
@@ -18,7 +18,7 @@ const STATUS_TEXT: Record<string, string> = {
   reading: 'Reading evidence',
   submitted: 'Verifier checking citations',
   verified: 'Verified',
-  rejected: 'Rejected — re-reading',
+  rejected: 'Rejected, re-reading',
   failed: 'Failed',
   skipped: 'Not needed',
 };
@@ -135,9 +135,6 @@ function PageMock({ rec }: { rec: EvidenceRecord }) {
       </div>
       <div className="browser">
         <div className="chrome">
-          <i />
-          <i />
-          <i />
           <span>{String(d.merchant).toLowerCase().replace(/[^a-z]+/g, '')}.example/product</span>
         </div>
         <div className="body">
@@ -157,6 +154,72 @@ function PageMock({ rec }: { rec: EvidenceRecord }) {
         )}
       </div>
       {hidden && !agent && <p className="tip">This page held text no person could see. Switch to “What the agent read”.</p>}
+    </div>
+  );
+}
+
+// Try changing a sealed record. The engine runs its own checks on a copy and says what they would catch;
+// the record on file stays as it is.
+function TamperTry({ c, rec }: { c: CaseFile; rec: EvidenceRecord }) {
+  const fields = Object.keys(rec.data);
+  const cited = ROLES.flatMap((r) => c.investigators[r].finding?.citations ?? []).find((k) => k.evidence_id === rec.id)?.field;
+  const [field, setField] = useState(cited ?? fields[0]);
+  const [value, setValue] = useState(show(rec.data[field]));
+  const result = useStore((s) => (s.tamper?.evidenceId === rec.id ? s.tamper : null));
+  useEffect(() => {
+    const f = cited ?? fields[0];
+    setField(f);
+    setValue(show(rec.data[f]));
+  }, [rec.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const send = useStore((s) => s.send);
+  const changed = value !== show(rec.data[field]);
+  return (
+    <div className="tamper">
+      <label>Try to change this record</label>
+      <div className="tamper-row">
+        <select
+          value={field}
+          onChange={(e) => {
+            setField(e.target.value);
+            setValue(show(rec.data[e.target.value]));
+          }}
+        >
+          {fields.map((f) => (
+            <option key={f}>{f}</option>
+          ))}
+        </select>
+        <input value={value} onChange={(e) => setValue(e.target.value)} spellCheck={false} />
+      </div>
+      <button className="btn" disabled={!changed} onClick={() => send({ type: 'tamper', nonce: nonce(), caseId: c.id, evidenceId: rec.id, field, value })}>
+        Change it and check
+      </button>
+      {result && (
+        <div className="tamper-result">
+          <p>
+            <b>The seal of {result.evidenceId} no longer matches.</b> Its hash covers every field, so {result.field} changing from {show(result.before)} to{' '}
+            {show(result.after)} shows at once.
+          </p>
+          {result.later.length > 0 && (
+            <p>
+              Sealing it again would change the {result.later.length} seal{result.later.length === 1 ? '' : 's'} after it, and the chain would end on{' '}
+              <span className="mono">{result.resealedHead.slice(0, 10)}…</span> instead of the <span className="mono">{result.headOnFile.slice(0, 10)}…</span>{' '}
+              recorded when the case opened.
+            </p>
+          )}
+          {result.rejected.length > 0 ? (
+            <ul>
+              {result.rejected.map((k, i) => (
+                <li key={i} style={{ ['--c' as string]: ROLE_COLOR[k.role] }}>
+                  <b>{ROLE_NAME[k.role]}</b> would be sent back: <span className="mono">{k.evidence_id}.{k.field}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No finding cites this record, so no ruling rests on it.</p>
+          )}
+          <small>Checked on a copy. The case on file is unchanged.</small>
+        </div>
+      )}
     </div>
   );
 }
@@ -212,6 +275,7 @@ export function Inspector({ c }: { c: CaseFile }) {
             <span className="mono">sha256 {rec.hash.slice(0, 16)}…</span>
             <span>{c.integrity.ok ? `sealed · chain of ${c.integrity.records} verified` : 'chain broken'}</span>
           </div>
+          <TamperTry c={c} rec={rec} />
         </div>
       ) : null}
       <div className="feed">
@@ -241,9 +305,7 @@ export function Verdict({ c }: { c: CaseFile }) {
       <div className="bar-wrap">
         <div className="bar-title">
           <h3>{awaiting ? 'Proposed ruling' : hold ? 'Who would have paid' : 'Who pays'}</h3>
-          {ruling ? (
-            <span className="code mono">{ruling.reason_code}</span>
-          ) : (
+          {!ruling && (
             <span className="pending">
               {c.arbiter.status === 'deliberating'
                 ? `Arbiter is weighing ${active.length} verified findings…`
@@ -284,7 +346,6 @@ export function Verdict({ c }: { c: CaseFile }) {
         <div className="settlement">
           {c.settlement.map((l, i) => (
             <div key={i} className="line">
-              <i style={{ background: l.party === 'guarantee' ? PARTY_COLOR.fraud : PARTY_COLOR[l.party] }} />
               <span className="lbl">{l.label}</span>
               <span className="formula mono">
                 {l.formula} <em>{l.source}</em>
@@ -345,7 +406,6 @@ export function CaseInfo({ c }: { c: CaseFile }) {
         ← {backTo}
       </button>
       <div className="case-title">
-        <span className="mono">{c.id}</span>
         <CaseState c={c} />
       </div>
       <h2>{p.item}</h2>
@@ -401,9 +461,11 @@ const LENSES: { id: Lens; name: string }[] = [
   { id: 'liability', name: 'Top' },
 ];
 
+// The controls for looking at the replay, in one row: which side to look from, and the team's cards.
 export function ReplayLens() {
   const lens = useStore((s) => s.replayLens);
   const set = useStore((s) => s.set);
+  const dock = useStore(dockOpen);
   return (
     <div className="replay-lens">
       <div className="seg" role="tablist" aria-label="Which side of the corridor to look at">
@@ -413,26 +475,14 @@ export function ReplayLens() {
           </button>
         ))}
       </div>
+      <button className="dock-toggle" onClick={() => set({ dockChoice: !dock })} aria-expanded={dock}>
+        {dock ? 'Hide the team' : 'Show the team'}
+      </button>
     </div>
   );
 }
 
 // How long the arbiter has been stopped, from the engine's own log of when it stopped.
-function Waited({ since }: { since: number }) {
-  const skew = useStore((s) => s.skew);
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const s = Math.max(0, Math.floor((Date.now() + skew - since) / 1000));
-  return (
-    <>
-      {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
-    </>
-  );
-}
-
 // The moment a person is needed. The arbiter has drafted a ruling on a large
 // order and stopped mid-turn; nothing moves on this case until someone decides.
 export function ApprovalBanner({ c }: { c: CaseFile }) {
@@ -440,25 +490,17 @@ export function ApprovalBanner({ c }: { c: CaseFile }) {
   const info = useStore((s) => s.info);
   const ruling = c.arbiter.ruling;
   if (c.status !== 'awaiting_approval' || !ruling) return null;
-  const stopped = [...c.log].reverse().find((l) => l.who === 'Arbiter' && l.text.startsWith('ruling held'))?.t ?? c.openedAt;
   return (
     <div className="approval-banner" role="alertdialog" aria-label="A ruling is waiting for your approval">
       <div className="what">
         <b>
-          <i />
           The arbiter has stopped. This ruling needs a person.
         </b>
         <span>
-          {eur(c.purchase.total)} is at or above the {eur(info?.approvalThreshold ?? 0, 0)} line. Waiting <Waited since={stopped} />. Every other case keeps
-          moving.
+          {eur(c.purchase.total)} is at or above the {eur(info?.approvalThreshold ?? 0, 0)} line.
         </span>
       </div>
       <div className="proposal" title={ruling.rationale}>
-        <div className="minibar">
-          {PARTIES.filter((p) => ruling.split[p] > 0).map((p) => (
-            <i key={p} style={{ width: `${ruling.split[p]}%`, background: PARTY_COLOR[p] }} />
-          ))}
-        </div>
         <span>
           {PARTIES.filter((p) => ruling.split[p] > 0)
             .map((p) => `${ruling.split[p]}% ${PARTY_NAME[p]}`)

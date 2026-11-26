@@ -555,7 +555,7 @@ function Box() {
           below the box: level with its bottom face, the two fight over the same pixels and flicker. */}
       <mesh position={[0, -0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[80, 60]} />
-        <MeshReflectorMaterial resolution={1024} blur={[420, 140]} mixBlur={1} mixStrength={2.2} mixContrast={1} roughness={1} depthScale={0} color="#0c0c0e" metalness={0.6} mirror={0.55} />
+        <MeshReflectorMaterial resolution={512} blur={[420, 140]} mixBlur={1} mixStrength={2.2} mixContrast={1} roughness={1} depthScale={0} color="#0c0c0e" metalness={0.6} mirror={0.55} />
       </mesh>
       <lineSegments geometry={lines.lanes}>
         <lineBasicMaterial color="#ffffff" transparent opacity={0.09} />
@@ -749,7 +749,7 @@ export function GateScene() {
   useMemo(() => (sceneMountedAt = performance.now()), []);
   return (
     <>
-      <Canvas camera={{ position: [-6, 4, 11], fov: 30, near: 0.5, far: 200 }} dpr={[1, 2]} gl={{ antialias: true }}>
+      <Canvas camera={{ position: [-6, 4, 11], fov: 30, near: 0.5, far: 200 }} dpr={[1, 1.5]} gl={{ antialias: false }}>
         <color attach="background" args={[BG]} />
         <fog attach="fog" args={[BG, 14, 34]} />
         <Rig />
@@ -759,7 +759,7 @@ export function GateScene() {
         <WaitingCases />
         <Threads />
         <OrbitControls makeDefault enablePan={false} enableZoom={false} target={TARGET} minPolarAngle={0.05} maxPolarAngle={1.5} enableDamping dampingFactor={0.08} rotateSpeed={0.5} />
-        <EffectComposer>
+        <EffectComposer multisampling={2}>
           <Bloom intensity={0.55} luminanceThreshold={0.35} luminanceSmoothing={0.5} mipmapBlur />
           <Vignette eskil={false} offset={0.25} darkness={0.7} />
         </EffectComposer>

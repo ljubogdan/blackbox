@@ -19,7 +19,6 @@ export function CaseState({ c, detail = false }: { c: CaseFile; detail?: boolean
   const verified = active.filter((r) => c.investigators[r].status === 'verified').length;
   return (
     <span className={`state ${c.status} ${c.closedAt ? 'closed' : 'open'}`} style={{ ['--c' as string]: color }}>
-      <i />
       {STATUS_LABEL[c.status]}
       {detail && c.status === 'investigating' && (
         <em>

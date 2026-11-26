@@ -233,10 +233,26 @@ export type ServerMsg =
   | { type: 'case'; case: CaseFile }
   | { type: 'stats'; stats: Stats }
   | { type: 'lane'; lane: Lane }
-  | { type: 'created'; caseId: string; nonce: string };
+  | { type: 'created'; caseId: string; nonce: string }
+  | { type: 'tampered'; nonce: string; result: TamperResult };
+
+// What the checks make of a record changed after it was sealed. Worked out on a copy: the case on file is not touched.
+export interface TamperResult {
+  caseId: string;
+  evidenceId: string;
+  field: string;
+  before: Scalar;
+  after: Scalar;
+  broken: string[]; // records whose seal no longer matches their content
+  later: string[]; // records after it, whose seals would all have to be redone to hide the change
+  headOnFile: string; // the chain head recorded when the case opened
+  resealedHead: string; // the head after resealing the altered chain
+  rejected: { role: Role; evidence_id: string; field: string; reason: string }[]; // citations the Verifier would now refuse
+}
 
 export type ClientMsg =
   | { type: 'approve'; caseId: string; approved: boolean }
+  | { type: 'tamper'; nonce: string; caseId: string; evidenceId: string; field: string; value: Scalar }
   | { type: 'trigger'; scenario: string; stage?: 'hold' | 'dispute'; nonce?: string }
   | { type: 'pace'; paused: boolean }
   | { type: 'custom'; nonce: string; spec: CustomSpec }

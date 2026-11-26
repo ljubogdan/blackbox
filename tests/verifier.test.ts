@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Citation, EvidenceRecord, Scalar } from '../shared/types';
-import { checkCitations, missingCoverage } from '../server/agents/verify';
+import { checkCitations, missingCoverage, tamperCheck } from '../server/agents/verify';
 import { buildCase, chainIntegrity, seal } from '../server/data/scenarios';
 import { Rng } from '../server/rng';
 
@@ -161,4 +161,38 @@ test("a record from another case does not cover this one's question", () => {
   const other = sealedCase(2);
   const evidence = new Map([...mine.evidence, ...other.evidence]);
   assert.deepEqual(missingCoverage('integrity', mine.caseFile.id, [citeFrom(other.record('SES'))], evidence), ['the session (SES)']);
+});
+
+// ───────────────────────── a record changed after sealing ─────────────────────────
+
+test('changing a record breaks its seal, fails every citation to it, and leaves the case untouched', () => {
+  const { caseFile, record } = sealedCase(3);
+  const ord = record('ORD');
+  const total = ord.data.total as number;
+  caseFile.investigators.mandate.finding = {
+    role: 'mandate',
+    party: 'agent_provider',
+    liability: 100,
+    confidence: 90,
+    summary: 'test',
+    citations: [
+      { evidence_id: ord.id, field: 'total', value: total },
+      { evidence_id: record('MND').id, field: 'max_amount', value: record('MND').data.max_amount },
+    ],
+  };
+  const result = tamperCheck(caseFile, ord.id, 'total', total - 100)!;
+  assert.deepEqual(result.broken, [ord.id]);
+  assert.equal(result.after, total - 100); // still a number
+  assert.deepEqual(result.rejected.map((k) => [k.role, k.evidence_id]), [['mandate', ord.id]]);
+  // Resealing hides the broken seal but not the change: the head no longer matches the one on file.
+  assert.notEqual(result.resealedHead, result.headOnFile);
+  assert.equal(result.later.length, caseFile.evidence.length - 1 - caseFile.evidence.indexOf(ord));
+  // Only a copy was changed.
+  assert.equal(ord.data.total, total);
+  assert.equal(chainIntegrity(caseFile.evidence).ok, true);
+});
+
+test('a field that is not on the record changes nothing', () => {
+  const { caseFile, record } = sealedCase(4);
+  assert.equal(tamperCheck(caseFile, record('ORD').id, 'no_such_field', 1), null);
 });

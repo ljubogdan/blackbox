@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { play } from './sound';
-import type { CaseFile, ClientMsg, EngineInfo, Lane, Party, PurchaseLite, Role, ServerMsg, Signature, Stats } from '../../shared/types';
+import type { CaseFile, ClientMsg, EngineInfo, Lane, Party, PurchaseLite, Role, ServerMsg, Signature, Stats, TamperResult } from '../../shared/types';
 
 export const PARTY_COLOR: Record<Party, string> = {
   customer: '#a593ff',
@@ -45,6 +45,10 @@ interface Store {
   lens: Lens; // which way the live view is being looked at
   lensGo: { to: Lens; n: number } | null; // a request to turn the box to a side
   hover: string | null; // the filed case under the pointer
+  stepHover: string | null; // the step of the replay under the pointer
+  drawn: string | null; // the case whose journey the replay has finished drawing
+  dockChoice: boolean | null; // the team's cards opened or closed by hand; null until the person chooses
+  tamper: (TamperResult & { at: number }) | null; // what the checks made of an edit tried on the open case
   replayLens: Lens; // the same, for the replay of one case
   replayGo: { to: Lens; n: number } | null;
   entering: { caseId: string; at: number } | null; // the camera is diving into the box towards this case
@@ -98,6 +102,10 @@ export const useStore = create<Store>((set, get) => ({
   lens: 'flow',
   lensGo: null,
   hover: null,
+  stepHover: null,
+  drawn: null,
+  dockChoice: null,
+  tamper: null,
   replayLens: 'flow',
   replayGo: null,
   entering: null,
@@ -122,10 +130,16 @@ export const useStore = create<Store>((set, get) => ({
   open: (caseId) => {
     const view = get().view;
     const from = view === 'case' ? get().from : view;
-    const arrive = () => set({ view: 'case', from, selected: caseId, inspect: null, limitPreview: null, pageMode: 'human', replayLens: 'flow', replayGo: null, entering: null, boxing: null, hover: null });
-    // From a merchant's box, the camera dives into it first; the replay is what is inside it.
-    // A case that sits in another merchant's box is not in this one to dive towards.
+    const arrive = () => set({ view: 'case', from, selected: caseId, tamper: null, inspect: null, limitPreview: null, pageMode: 'human', replayLens: 'flow', replayGo: null, entering: null, boxing: null, hover: null });
+    // From the globe, the camera flies down into the merchant's city first; from a merchant's box,
+    // it dives into the box. A case that sits in another merchant's box is not in this one to dive towards.
     const home = get().cases[caseId]?.purchase.merchant.name;
+    if (view === 'network') {
+      if (get().entering) return;
+      set({ entering: { caseId, at: performance.now() } });
+      setTimeout(arrive, DIVE_MS);
+      return;
+    }
     if (view !== 'live' || (home && home !== get().merchant)) return arrive();
     if (get().entering) return;
     set({ entering: { caseId, at: performance.now() } });
@@ -163,6 +177,36 @@ function cue(before: CaseFile | undefined, after: CaseFile) {
 
 export const DIVE_MS = 900;
 
+// Whether this browser can draw the 3D scenes at all (graphics acceleration off, or the GPU blocked
+// after a crash, and it cannot). Asked once, and the test context is given straight back.
+export const canDraw3D = (() => {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return !!gl;
+  } catch {
+    return false;
+  }
+})();
+
+// The stream never stops, so the page keeps only what it can show: every case still open, the one
+// being looked at, and the most recent closed ones. The engine keeps a similar window.
+const KEEP_CLOSED = 60;
+function trim(cases: Record<string, CaseFile>, selected: string | null): Record<string, CaseFile> {
+  const closed = Object.values(cases).filter((c) => c.closedAt && c.id !== selected);
+  if (closed.length <= KEEP_CLOSED) return cases;
+  const drop = new Set(closed.sort((a, b) => b.closedAt! - a.closedAt!).slice(KEEP_CLOSED).map((c) => c.id));
+  return Object.fromEntries(Object.entries(cases).filter(([id]) => !drop.has(id)));
+}
+
+// The person has asked their system for less motion: no camera flights, turns or slow motion.
+export const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// The team's cards float over the bottom of the replay. They wait until the journey has been drawn,
+// so the replay has the screen to itself first; once the person opens or closes them, that stands.
+export const dockOpen = (s: Store) => s.dockChoice ?? (!canDraw3D || (s.drawn !== null && s.drawn === s.selected));
+export const DOCK_H = 268;
+
 export const nonce = () => Math.random().toString(36).slice(2, 10);
 
 function apply(msg: ServerMsg) {
@@ -193,7 +237,7 @@ function apply(msg: ServerMsg) {
             { caseId: msg.case.id, merchant: msg.case.purchase.merchant.name, source: msg.case.network.sourceMerchant, total: msg.case.purchase.total, at: performance.now() },
           ],
         });
-      useStore.setState({ cases: { ...s.cases, [msg.case.id]: msg.case } });
+      useStore.setState({ cases: trim({ ...s.cases, [msg.case.id]: msg.case }, s.selected) });
       break;
     case 'created':
       useStore.setState({ lastCreated: { nonce: msg.nonce, caseId: msg.caseId } });
@@ -204,6 +248,9 @@ function apply(msg: ServerMsg) {
       break;
     case 'stats':
       useStore.setState({ stats: msg.stats });
+      break;
+    case 'tampered':
+      if (msg.result.caseId === s.selected) useStore.setState({ tamper: { ...msg.result, at: performance.now() } });
       break;
     case 'signature':
       useStore.setState({

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { BoardRow, CaseFile, Signature } from '../../../shared/types';
-import { MERCHANTS, PARTIES, PARTY_NAME } from '../../../shared/types';
-import { caseList, eur, PARTY_COLOR, useStore, type Lens } from '../store';
+import { MERCHANTS } from '../../../shared/types';
+import { caseList, eur, useStore, type Lens } from '../store';
 import { CaseState } from './State';
 
 // The box reads differently from each side.
@@ -14,7 +14,6 @@ const LENSES: { id: Lens; name: string; text: string }[] = [
 function CaseRow({ c }: { c: CaseFile }) {
   const open = useStore((s) => s.open);
   const hot = useStore((s) => s.hover === c.id);
-  const ruling = c.arbiter.ruling;
   const point = (id: string | null) => useStore.getState().set({ hover: id });
   return (
     <button className={`case-row ${c.status} ${hot ? 'hot' : ''}`} onClick={() => open(c.id)} onMouseEnter={() => point(c.id)} onMouseLeave={() => point(null)} onFocus={() => point(c.id)} onBlur={() => point(null)}>
@@ -25,14 +24,7 @@ function CaseRow({ c }: { c: CaseFile }) {
       <div className="l2">{c.stage === 'hold' ? `Held: ${c.flag ?? 'being screened'}` : `“${c.claim}”`}</div>
       <div className="l3">
         <CaseState c={c} detail />
-        {c.closedAt && ruling && (
-          <span className="minibar" title={PARTIES.filter((p) => ruling.split[p] > 0).map((p) => `${PARTY_NAME[p]} ${ruling.split[p]}%`).join(' · ')}>
-            {PARTIES.filter((p) => ruling.split[p] > 0).map((p) => (
-              <i key={p} style={{ width: `${ruling.split[p]}%`, background: PARTY_COLOR[p] }} />
-            ))}
-          </span>
-        )}
-        <span className="mono id">{c.whatIfOf ? `${c.id} · what-if` : c.id}</span>
+        {c.whatIfOf && <span className="whatif-tag">What-if</span>}
       </div>
     </button>
   );
@@ -143,7 +135,19 @@ export function LivePanels() {
                 <i aria-hidden>×</i>
               </button>
             )}
-            {list.length === 0 && <div className="empty">{merchant ? 'No cases at this merchant yet.' : 'Waiting for the first case…'}</div>}
+            {list.length === 0 &&
+              (merchant ? (
+                <div className="empty">No cases at this merchant yet.</div>
+              ) : (
+                // the shape of the first cases, while they are on their way
+                [0, 1, 2, 3].map((k) => (
+                  <div key={k} className="case-row skeleton" aria-hidden>
+                    <i style={{ width: '62%' }} />
+                    <i style={{ width: '88%' }} />
+                    <i style={{ width: '36%' }} />
+                  </div>
+                ))
+              ))}
             {list.map((c) => (
               <CaseRow key={c.id} c={c} />
             ))}

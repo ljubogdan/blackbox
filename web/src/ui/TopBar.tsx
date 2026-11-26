@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { caseBox, eur, useStore, waitingCases } from '../store';
+import { eur, useStore, waitingCases } from '../store';
 
 const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -53,10 +53,8 @@ export function TopBar() {
   const inCase = useStore((s) => (s.view === 'case' ? s.selected : null));
   const paused = useStore((s) => s.paused);
   const setPaused = useStore((s) => s.setPaused);
-  const back = useStore((s) => s.back);
   const toNetwork = useStore((s) => s.toNetwork);
   const view = useStore((s) => s.view);
-  const boxName = useStore((s) => (s.view === 'live' ? s.merchant : caseBox(s)));
   const sound = useStore((s) => s.sound);
   const set = useStore((s) => s.set);
   const cases = useStore((s) => s.cases);
@@ -67,30 +65,32 @@ export function TopBar() {
   return (
     <header className="topbar">
       <button className="brand" onClick={toNetwork} title="The network">
-        <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden>
-          <rect x="1.5" y="1.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M10 1.5v17" stroke="currentColor" strokeWidth="1.5" />
-          <circle cx="5.9" cy="10" r="1.7" fill="currentColor" />
+        {/* the black box itself: a cube lit from above, its top brightest and its right side in shadow */}
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+          <defs>
+            <linearGradient id="bb-top" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#9c9ca6" />
+              <stop offset="1" stopColor="#5b5b64" />
+            </linearGradient>
+            <linearGradient id="bb-left" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#3a3a42" />
+              <stop offset="1" stopColor="#1d1d22" />
+            </linearGradient>
+            <linearGradient id="bb-right" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#1b1b20" />
+              <stop offset="1" stopColor="#0c0c0f" />
+            </linearGradient>
+          </defs>
+          <path d="M12 2.2 21 7.4 12 12.6 3 7.4Z" fill="url(#bb-top)" />
+          <path d="M3 7.4 12 12.6V22.8L3 17.6Z" fill="url(#bb-left)" />
+          <path d="M21 7.4 12 12.6V22.8L21 17.6Z" fill="url(#bb-right)" />
+          {/* edges catching the light: brightest along the top, fading down the sides */}
+          <path d="M3 7.4 12 2.2 21 7.4" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="0.9" strokeLinejoin="round" />
+          <path d="M3 7.4 12 12.6 21 7.4M12 12.6V22.8" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="0.8" strokeLinejoin="round" />
+          <path d="M3 7.4V17.6L12 22.8 21 17.6V7.4" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.8" strokeLinejoin="round" />
         </svg>
         <span>Blackbox</span>
       </button>
-      {view !== 'network' && (
-        <nav className="crumbs">
-          <button onClick={toNetwork}>Network</button>
-          {boxName && (
-            <>
-              <i>/</i>
-              {inCase ? <button onClick={back}>{boxName}</button> : <span>{boxName}</span>}
-            </>
-          )}
-          {inCase && (
-            <>
-              <i>/</i>
-              <span className="mono">{inCase}</span>
-            </>
-          )}
-        </nav>
-      )}
       <div className="metrics">
         <Metric label="Guaranteed" value={stats ? <Money value={stats.gmv} /> : '—'} />
         <Metric label="Stopped before settlement" value={stats ? <Money value={stats.prevented} /> : '—'} />
@@ -99,8 +99,8 @@ export function TopBar() {
       <div className="controls">
         {waiting.length > 0 && (
           <button className="btn wait" onClick={() => open(next.id)} title="Open the ruling that has waited longest">
-            <i />
-            {waiting.length === 1 ? '1 ruling is waiting for you' : `${waiting.length} rulings are waiting for you`}
+            <span className="wide">{waiting.length === 1 ? '1 ruling is waiting for you' : `${waiting.length} rulings are waiting for you`}</span>
+            <span className="narrow">{waiting.length} waiting</span>
           </button>
         )}
         <button className="btn primary" onClick={() => set({ builder: true })}>

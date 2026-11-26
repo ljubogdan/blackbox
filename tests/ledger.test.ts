@@ -49,7 +49,7 @@ test('full fault of the agent provider: the customer is refunded and the provide
 test('a claim the customer loses refunds nothing and charges nobody', () => {
   const lines = settle(aCase('friendly'), ruling(split(100, 0, 0, 0)));
   assert.equal(lines.length, 1);
-  assert.equal(lines[0].label, 'Claim denied — no refund');
+  assert.equal(lines[0].label, 'Claim denied, no refund');
   assert.equal(lines[0].amount, 0);
 });
 

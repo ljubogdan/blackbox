@@ -50,7 +50,7 @@ th,td{padding:6px 10px 6px 0;text-align:left;vertical-align:top;border-bottom:1p
 th{font-weight:600;font-size:11.5px;color:#6a6a70;border-bottom:1px solid #16161a}
 td.num,th.num{text-align:right;padding-right:0;white-space:nowrap}
 tr.rec th{width:34%;border-bottom:1px solid #ecebe6;font-weight:400}
-code{font:11.5px ui-monospace,"SF Mono",Menlo,"IBM Plex Mono",monospace;color:#33333a;word-break:break-all}
+code{font:inherit;font-size:12px;color:#33333a;word-break:break-all}
 .muted{color:#6a6a70}.ok{color:#0c7a50}.bad{color:#c2331f}
 .seal{font-size:12.5px;color:#4a4a50}
 footer{margin-top:40px;padding-top:14px;border-top:1px solid #dddcd6;font-size:11.5px;color:#6a6a70;display:flex;justify-content:space-between;gap:20px}

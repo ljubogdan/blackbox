@@ -115,7 +115,7 @@ export function buildCase(rng: Rng, n: number, sabotage: Sabotage, purchaseN: nu
   };
 
   const instruction = `${item.ask}. Spend no more than €${max}. One unit only.`;
-  const mnd = ev('MND', '', 'Mandate — what the owner authorised', {
+  const mnd = ev('MND', '', 'Mandate: what the owner authorised', {
     instruction,
     max_amount: max,
     currency: 'EUR',
@@ -138,7 +138,7 @@ export function buildCase(rng: Rng, n: number, sabotage: Sabotage, purchaseN: nu
   ) => {
     clock += rng.int(8, 55) * 1000;
     const nn = steps.length + 1;
-    const rec = ev('TRL', `-${pad(nn, 2)}`, `Agent trail — step ${nn}`, {
+    const rec = ev('TRL', `-${pad(nn, 2)}`, `Agent trail, step ${nn}`, {
       step: nn,
       kind,
       at: iso(clock),
@@ -158,7 +158,7 @@ export function buildCase(rng: Rng, n: number, sabotage: Sabotage, purchaseN: nu
     id: `TRL-${tag}-01`,
     kind: 'TRL',
     caseId,
-    title: 'Agent trail — step 1',
+    title: 'Agent trail, step 1',
     data: { step: 1, kind: 'mandate', at: iso(t0), actor: 'agent', merchant: '', note: 'Instruction received', observed_price: null },
     prev: '',
     hash: '',
@@ -234,7 +234,7 @@ export function buildCase(rng: Rng, n: number, sabotage: Sabotage, purchaseN: nu
       step('view', `Viewed ${item.title} at ${merchant.name}`, price, { item: item.title });
       step('addon', 'Added a 3-year warranty (not in the instruction)', round2(price + addons), { item: '3-year warranty', addon_price: addons });
       step('cart', 'Added to cart', round2(price + addons), { item: item.title, quantity: 1 });
-      step('checkout', 'Paid — a mandatory service fee appeared only on the receipt', round2(price + addons + fees), { item: item.title });
+      step('checkout', 'Paid. A mandatory service fee appeared only on the receipt', round2(price + addons + fees), { item: item.title });
       feesDisclosed = false;
       listingExtra.mandatory_fee = fees;
       claim = `I set a limit of €${max}. I was charged €${round2(price + addons + fees).toFixed(2)}, with a warranty and a fee I never asked for.`;
@@ -278,7 +278,7 @@ export function buildCase(rng: Rng, n: number, sabotage: Sabotage, purchaseN: nu
   const total = round2(unit * qty + fees + addons);
   const sellerPoint = MERCHANTS.find((m) => m.name === orderMerchant)!;
 
-  ev('LST', '', 'Listing snapshot — what the merchant advertised', {
+  ev('LST', '', 'Listing snapshot: what the merchant advertised', {
     title: orderTitle,
     merchant: orderMerchant,
     listed_price: listed,
@@ -286,7 +286,7 @@ export function buildCase(rng: Rng, n: number, sabotage: Sabotage, purchaseN: nu
     snapshot_at: iso(t0 + 60_000),
     ...listingExtra,
   });
-  ev('ORD', '', hold ? 'Authorisation request — what is about to be charged' : 'Order — what was charged', {
+  ev('ORD', '', hold ? 'Authorisation request: what is about to be charged' : 'Order: what was charged', {
     title: orderTitle,
     merchant: orderMerchant,
     category: orderCategory,
@@ -298,7 +298,7 @@ export function buildCase(rng: Rng, n: number, sabotage: Sabotage, purchaseN: nu
     currency: 'EUR',
     charged_at: iso(clock + 3000),
   });
-  ev('SES', '', 'Session — where the checkout came from', {
+  ev('SES', '', 'Session: where the checkout came from', {
     issued_device: device,
     issued_city: buyer.city,
     checkout_device: checkoutDevice,
@@ -310,12 +310,12 @@ export function buildCase(rng: Rng, n: number, sabotage: Sabotage, purchaseN: nu
   });
   // Before settlement nothing has been delivered and nobody has complained yet.
   if (!hold) {
-    ev('DLV', '', 'Delivery — what happened after', {
+    ev('DLV', '', 'Delivery: what happened after', {
       delivered: true,
       address_match: addressMatch,
       post_purchase_activity: activity,
     });
-    ev('CLM', '', "Claim — the customer's dispute", {
+    ev('CLM', '', "Claim: the customer's dispute", {
       claim_text: claim,
       filed_at: iso(now),
     });

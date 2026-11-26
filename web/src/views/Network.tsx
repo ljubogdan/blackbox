@@ -482,7 +482,7 @@ function NetworkLabels() {
 export function NetworkScene() {
   return (
     <>
-      <Canvas camera={{ position: [0, 9, 11], fov: 30, near: 0.5, far: 200 }} dpr={[1, 2]} gl={{ antialias: true }}>
+      <Canvas camera={{ position: [0, 9, 11], fov: 30, near: 0.5, far: 200 }} dpr={[1, 1.5]} gl={{ antialias: false }}>
         <color attach="background" args={[BG]} />
         <fog attach="fog" args={[BG, 16, 40]} />
         <Rig />
@@ -490,7 +490,7 @@ export function NetworkScene() {
         {/* just below the boxes: level with their bottom faces, the two would flicker */}
         <mesh position={[0, -0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[90, 70]} />
-          <MeshReflectorMaterial resolution={1024} blur={[420, 140]} mixBlur={1} mixStrength={2} mixContrast={1} roughness={1} depthScale={0} color="#0c0c0e" metalness={0.6} mirror={0.5} />
+          <MeshReflectorMaterial resolution={512} blur={[420, 140]} mixBlur={1} mixStrength={2} mixContrast={1} roughness={1} depthScale={0} color="#0c0c0e" metalness={0.6} mirror={0.5} />
         </mesh>
         <Mesh />
         {MERCHANTS.map((m, i) => (
@@ -500,7 +500,7 @@ export function NetworkScene() {
         <Arrivals />
         <Signals />
         <OrbitControls makeDefault enablePan={false} enableZoom minDistance={6} maxDistance={40} target={TARGET} minPolarAngle={0.05} maxPolarAngle={1.45} enableDamping dampingFactor={0.08} rotateSpeed={0.5} />
-        <EffectComposer>
+        <EffectComposer multisampling={2}>
           <Bloom intensity={0.6} luminanceThreshold={0.35} luminanceSmoothing={0.5} mipmapBlur />
           <Vignette eskil={false} offset={0.25} darkness={0.7} />
         </EffectComposer>

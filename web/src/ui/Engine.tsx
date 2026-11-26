@@ -81,17 +81,11 @@ export function Engine({ caseId }: { caseId: string | null }) {
         </div>
       )}
       <div className="strip">
-        <span className="notice">Synthetic data only · no real accounts or money · not financial advice</span>
+        <span className="notice">Synthetic data. No real money.</span>
         <button className="engine-toggle" onClick={() => set({ engine: !open })} aria-expanded={open}>
           <span className={`live ${info?.mode ?? ''}`}>{info?.mode === 'live' ? 'Live model' : 'Scripted stand-in model'}</span>
           <span>
             <b ref={now}>0</b> model calls in flight
-          </span>
-          <span>
-            <b>{stats?.peakConcurrent ?? 0}</b> peak
-          </span>
-          <span>
-            <b>{stats?.inferences ?? 0}</b> total
           </span>
           <svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d={open ? 'M2.5 4.5 6 8l3.5-3.5' : 'M2.5 7.5 6 4l3.5 3.5'} />

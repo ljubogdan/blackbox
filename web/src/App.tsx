@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { connect, useStore } from './store';
+import { Component, useEffect, useState, type ReactNode } from 'react';
+import { canDraw3D, connect, dockOpen, useStore } from './store';
 import { ApprovalBanner, CaseInfo, Inspector, Investigators, ReplayLens, Verdict } from './ui/CasePanels';
 import { Engine } from './ui/Engine';
 import { LivePanels } from './ui/LivePanels';
@@ -8,6 +8,25 @@ import { TopBar } from './ui/TopBar';
 import { CaseScene } from './views/CaseScene';
 import { GateScene } from './views/Gate';
 import { GlobeScene } from './views/Globe';
+
+// Without WebGL (graphics acceleration turned off, or the GPU blocked after a crash) a 3D scene cannot
+// start. Everything around it still works, so a scene that cannot run is replaced by a note instead of
+// taking the whole page down with it.
+class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: !canDraw3D };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="no-3d">
+        <b>3D is not available in this browser</b>
+        <span>Turn on graphics acceleration in the browser's settings and reload. The cases and panels work without it.</span>
+      </div>
+    );
+  }
+}
 
 export function App() {
   const view = useStore((s) => s.view);
@@ -33,26 +52,30 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [back]);
 
+  const dock = useStore(dockOpen);
+
   const inCase = view === 'case' && !!c;
   return (
     <div className={`app ${engine ? 'engine-open' : ''} ${entering ? 'entering' : ''} ${opening ? 'opening' : ''}`}>
       <TopBar />
       {inCase ? (
-        <main className="case-view" key={selected}>
+        <main className={`case-view ${dock ? 'dock-open' : ''}`} key={selected}>
           <div className="stage">
-            <CaseScene c={c!} />
+            <SceneBoundary>
+              <CaseScene c={c!} />
+            </SceneBoundary>
             <CaseInfo c={c!} />
             <Inspector c={c!} />
             {c!.status === 'awaiting_approval' ? <ApprovalBanner c={c!} /> : <ReplayLens />}
           </div>
-          <section className="dock">
+          <section className={`dock ${dock ? '' : 'closed'}`}>
             <Investigators c={c!} />
             <Verdict c={c!} />
           </section>
         </main>
       ) : (
         <>
-          <div className="stage live">{view === 'network' ? <GlobeScene /> : <GateScene key={merchant ?? ''} />}</div>
+          <div className="stage live"><SceneBoundary>{view === 'network' ? <GlobeScene /> : <GateScene key={merchant ?? ''} />}</SceneBoundary></div>
           <LivePanels />
         </>
       )}

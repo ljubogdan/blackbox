@@ -1,11 +1,11 @@
-import { Line, OrbitControls } from '@react-three/drei';
+import { Line, MeshReflectorMaterial, OrbitControls } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { CaseFile, Role, TrailStep } from '../../../shared/types';
 import { ROLE_NAME, ROLES } from '../../../shared/types';
-import { BG, BREACH, eur, INK, MINT, PARTY_COLOR, ROLE_COLOR, useStore, type Lens } from '../store';
+import { BG, BREACH, DOCK_H, dockOpen, eur, INK, MINT, PARTY_COLOR, reducedMotion, ROLE_COLOR, useStore, type Lens } from '../store';
 import { Label, LabelLayer, Projector, useAnchor } from './labels';
 
 // The replay. The owner's instruction is a corridor:
@@ -133,6 +133,12 @@ export function layoutCase(c: CaseFile, limit?: number | null): Layout {
   return { nodes, claim, curve, breach, anchors, max, total, ordId: ord.id, mndId: mnd.id };
 }
 
+// The moment the journey leaves the corridor: the replay slows down through it and the camera
+// leans in. Set by the replay, read by the camera.
+const SLOW_MS = 1100;
+const PUNCH_MS = 2300;
+const moment = { at: -1e9, pos: new THREE.Vector3() };
+
 const TUBULAR = 420;
 const RADIAL = 10;
 
@@ -178,7 +184,6 @@ const wallShader = {
 function Corridor({ layout, progress, flash }: { layout: Layout; progress: React.MutableRefObject<number>; flash: { color: string; at: number } | null }) {
   const len = X1 - X0;
   useAnchor('limit', (out) => (out.set(X0, H + LIFT, W), true));
-  useAnchor('axis', (out) => (out.set(X0, LIFT, W), true));
   const cx = (X0 + X1) / 2;
   const edges = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(len, H, W * 2)), [len]);
   const grid = useMemo(() => {
@@ -257,6 +262,17 @@ function Corridor({ layout, progress, flash }: { layout: Layout; progress: React
         <meshBasicMaterial color="#141417" transparent opacity={0.7} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
     </group>
+  );
+}
+
+// A dark polished floor under the corridor: the journey, the walls and the sealed records are
+// mirrored in it, softly, which gives the scene its weight.
+function Ground() {
+  return (
+    <mesh position={[(X0 + X1) / 2, -0.02, 0.6]} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[40, 30]} />
+      <MeshReflectorMaterial resolution={512} blur={[300, 90]} mixBlur={1} mixStrength={1.6} mixContrast={1} roughness={1} depthScale={0} color="#0a0a0c" metalness={0.55} mirror={0.45} />
+    </mesh>
   );
 }
 
@@ -365,8 +381,14 @@ function StepNode({ node, progress }: { node: Node; progress: React.MutableRefOb
           e.stopPropagation();
           setInspect({ evidenceId: node.evidenceId });
         }}
-        onPointerOver={() => (document.body.style.cursor = 'pointer')}
-        onPointerOut={() => (document.body.style.cursor = '')}
+        onPointerOver={() => {
+          document.body.style.cursor = 'pointer';
+          useStore.getState().set({ stepHover: node.key });
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = '';
+          if (useStore.getState().stepHover === node.key) useStore.getState().set({ stepHover: null });
+        }}
       >
         <sphereGeometry args={[0.2, 12, 12]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
@@ -445,6 +467,106 @@ function Breach({ layout, progress }: { layout: Layout; progress: React.MutableR
       <points ref={sparks} geometry={geometry}>
         <pointsMaterial color={BREACH} size={0.05} sizeAttenuation transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </points>
+    </group>
+  );
+}
+
+// The sealed records in the order they were sealed: glass blocks along the front of the corridor,
+// each linked to the one before it by its hash. A change tried on one cracks it, and the seals after
+// it light up one by one: every one of them would have to be redone to hide the change.
+const CHAIN_Z = W + 0.8;
+const CHAIN_Y = 0.13;
+const BLOCK = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+const BLOCK_EDGES = new THREE.EdgesGeometry(BLOCK);
+const chainX = (i: number, n: number) => X0 + 0.25 + (n > 1 ? (i / (n - 1)) * (X1 - X0 - 0.5) : 0);
+const RIPPLE_MS = 110; // how long the crack takes to reach the next seal
+
+function ChainAnchor({ id, i, n }: { id: string; i: number; n: number }) {
+  useAnchor(`chain:${id}`, (out) => (out.set(chainX(i, n), CHAIN_Y + LIFT - 0.2, CHAIN_Z), true));
+  return null;
+}
+
+function EvidenceChain({ c, layout }: { c: CaseFile; layout: Layout }) {
+  const records = c.evidence;
+  const n = records.length;
+  const setInspect = useStore((s) => s.setInspect);
+  const inspected = useStore((s) => s.inspect?.evidenceId);
+  const edges = useRef<(THREE.LineBasicMaterial | null)[]>([]);
+  const fills = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
+  const groups = useRef<(THREE.Group | null)[]>([]);
+  const white = useMemo(() => new THREE.Color('#ffffff'), []);
+  const red = useMemo(() => new THREE.Color(BREACH), []);
+  const links = useMemo(() => {
+    const pts: number[] = [];
+    for (let i = 1; i < n; i++) pts.push(chainX(i - 1, n) + 0.1, CHAIN_Y, CHAIN_Z, chainX(i, n) - 0.1, CHAIN_Y, CHAIN_Z);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(new Array(pts.length).fill(0.35), 3));
+    return g;
+  }, [n]);
+
+  useFrame(({ clock }) => {
+    const t = useStore.getState().tamper;
+    const at = t ? records.findIndex((r) => r.id === t.evidenceId) : -1;
+    const age = t ? performance.now() - t.at : 0;
+    const linkColor = links.attributes.color as THREE.BufferAttribute;
+    records.forEach((r, i) => {
+      const edge = edges.current[i];
+      const fill = fills.current[i];
+      if (!edge || !fill) return;
+      const hit = at >= 0 && i >= at && age > (i - at) * RIPPLE_MS;
+      const broken = hit && i === at;
+      edge.color.copy(hit ? red : white);
+      edge.opacity = broken ? 0.7 + 0.3 * Math.sin(clock.elapsedTime * 8) : hit ? 0.75 : r.id === inspected ? 1 : 0.45;
+      fill.color.copy(hit ? red : white);
+      fill.opacity = broken ? 0.55 : hit ? 0.16 : r.id === inspected ? 0.22 : 0.07;
+      // the broken one shakes a little where it cracked
+      groups.current[i]?.position.set(chainX(i, n) + (broken && age < 600 ? Math.sin(age * 0.09) * 0.02 : 0), CHAIN_Y, CHAIN_Z);
+      if (i > 0) {
+        const c2 = hit ? [1, 0.36, 0.28] : [0.35, 0.35, 0.35];
+        linkColor.setXYZ((i - 1) * 2, c2[0], c2[1], c2[2]);
+        linkColor.setXYZ((i - 1) * 2 + 1, c2[0], c2[1], c2[2]);
+      }
+    });
+    linkColor.needsUpdate = true;
+  });
+
+  // A thread from the record being read to the moment of the journey it belongs to.
+  const i = records.findIndex((r) => r.id === inspected);
+  const anchor = inspected ? layout.anchors.get(inspected) : undefined;
+
+  return (
+    <group>
+      <lineSegments geometry={links}>
+        <lineBasicMaterial vertexColors transparent opacity={0.8} toneMapped={false} />
+      </lineSegments>
+      {records.map((r, k) => (
+        <ChainAnchor key={`a-${r.id}`} id={r.id} i={k} n={n} />
+      ))}
+      {records.map((r, k) => (
+        <group key={r.id} ref={(g) => void (groups.current[k] = g)} position={[chainX(k, n), CHAIN_Y, CHAIN_Z]}>
+          <mesh geometry={BLOCK}>
+            <meshBasicMaterial ref={(m) => void (fills.current[k] = m)} transparent opacity={0.07} depthWrite={false} toneMapped={false} />
+          </mesh>
+          <lineSegments geometry={BLOCK_EDGES}>
+            <lineBasicMaterial ref={(m) => void (edges.current[k] = m)} transparent opacity={0.45} toneMapped={false} />
+          </lineSegments>
+          <mesh
+            onClick={(e) => {
+              e.stopPropagation();
+              setInspect({ evidenceId: r.id });
+            }}
+            onPointerOver={() => (document.body.style.cursor = 'pointer')}
+            onPointerOut={() => (document.body.style.cursor = '')}
+          >
+            <boxGeometry args={[0.3, 0.3, 0.3]} />
+            <meshBasicMaterial colorWrite={false} depthWrite={false} />
+          </mesh>
+        </group>
+      ))}
+      {i >= 0 && anchor && (
+        <Line points={[[chainX(i, n), CHAIN_Y + 0.1, CHAIN_Z], [anchor.x, anchor.y, anchor.z]]} color="#ffffff" transparent opacity={0.3} lineWidth={1} dashed dashSize={0.06} gapSize={0.06} />
+      )}
     </group>
   );
 }
@@ -600,11 +722,31 @@ function Replay({ c, layout }: { c: CaseFile; layout: Layout }) {
     }
   }, [c.closedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // On arrival the corridor unfolds from the first step, then the journey is drawn through it.
+  // On arrival the corridor unfolds from the first step, then the journey is drawn through it,
+  // in slow motion for a moment where it leaves the corridor.
   const unfold = useRef<THREE.Group>(null!);
-  useFrame(() => {
-    const t = Math.min(1, (performance.now() - started.current - 350) / 3400);
+  const played = useRef(0); // ms of the journey drawn so far
+  const breachAt = useRef<number | null>(null);
+  const told = useRef(false); // whether the rest of the page has been told the journey is drawn
+  useEffect(() => {
+    moment.at = -1e9;
+  }, []);
+  useFrame((_, dt) => {
+    const now = performance.now();
+    const slow = breachAt.current !== null && now - breachAt.current < SLOW_MS && !reducedMotion();
+    played.current += Math.min(dt, 0.1) * 1000 * (slow ? 0.12 : 1);
+    const t = Math.min(1, (played.current - 350) / 3400);
     progress.current = t <= 0 ? 0 : 1 - Math.pow(1 - t, 2.2);
+    const b = layout.breach;
+    if (progress.current >= 1 && !told.current) {
+      told.current = true;
+      setTimeout(() => useStore.getState().set({ drawn: c.id }), 500);
+    }
+    if (b && breachAt.current === null && progress.current >= b.node.u - 0.03) {
+      breachAt.current = now;
+      moment.at = now;
+      moment.pos.copy(b.pos).setY(b.pos.y + LIFT);
+    }
     const u = Math.min(1, (performance.now() - started.current) / 1100);
     const k = Math.max(0.001, 1 - Math.pow(1 - u, 3));
     unfold.current.scale.x = k;
@@ -613,6 +755,7 @@ function Replay({ c, layout }: { c: CaseFile; layout: Layout }) {
 
   return (
     <group position={[0, LIFT, 0]}>
+      <Ground />
       <group ref={unfold}>
         <Corridor layout={layout} progress={progress} flash={flash} />
       </group>
@@ -633,6 +776,7 @@ function Replay({ c, layout }: { c: CaseFile; layout: Layout }) {
         />
       )}
       <Breach layout={layout} progress={progress} />
+      <EvidenceChain c={c} layout={layout} />
       {ROLES.map((r, i) => c.investigators[r].status !== 'skipped' && <Probe key={r} c={c} role={r} index={i} layout={layout} />)}
       <ChallengeBeam c={c} />
       <ArbiterSweep mode={c.arbiter.status === 'awaiting_approval' ? 'held' : c.arbiter.status === 'deliberating' ? 'sweep' : 'off'} />
@@ -644,10 +788,12 @@ function Replay({ c, layout }: { c: CaseFile; layout: Layout }) {
 function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
   const setInspect = useStore((s) => s.setInspect);
   const inspect = useStore((s) => s.inspect);
-  const citedBy = (evidenceId: string): Role[] =>
-    ROLES.filter(
-      (r) => c.investigators[r].status === 'verified' && c.investigators[r].finding?.citations.some((k) => layout.anchors.get(k.evidence_id) === layout.anchors.get(evidenceId)),
-    );
+  const stepHover = useStore((s) => s.stepHover);
+  const tamper = useStore((s) => s.tamper);
+  // Labels on every step crowd out the one that matters, so only the story keeps one: what the owner
+  // asked, where the journey left the mandate, what was charged and the dispute. The rest show on hover.
+  const story = (nd: Node, i: number) =>
+    i === 0 || nd.kind === 'charged' || nd.kind === 'claim' || nd === layout.breach?.node || nd.key === stepHover || nd.evidenceId === inspect?.evidenceId;
   const b = layout.breach;
   const over = b && b.node.price !== null ? b.node.price - layout.max : 0;
   // The corridor draws money and session only. An order for more units than the owner asked for
@@ -660,11 +806,8 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
       <Label anchor="limit" className="tag3d limit">
         <b>Limit {eur(layout.max)}</b>
       </Label>
-      <Label anchor="axis" className="tag3d axis">
-        €0
-      </Label>
       {allNodes(layout).map((nd, i) => {
-        const dots = citedBy(nd.evidenceId);
+        if (!story(nd, i)) return null;
         return (
           <Label
             key={nd.key}
@@ -676,13 +819,6 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
           >
             <span className="k">{nd.kind === 'charged' && c.stage === 'hold' ? 'To charge' : KIND_WORD[nd.kind]}</span>
             {nd.price !== null && <b>{eur(nd.price)}</b>}
-            {dots.length > 0 && (
-              <span className="dots">
-                {dots.map((r) => (
-                  <i key={r} style={{ background: ROLE_COLOR[r] }} />
-                ))}
-              </span>
-            )}
           </Label>
         );
       })}
@@ -702,6 +838,11 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
           )
         );
       })}
+      {c.evidence.map((r) => (
+        <Label key={r.id} anchor={`chain:${r.id}`} className={`tag3d chain ${tamper?.evidenceId === r.id ? 'broken' : ''} ${inspect?.evidenceId === r.id ? 'sel' : ''}`}>
+          {tamper?.evidenceId === r.id ? 'Seal broken' : r.kind}
+        </Label>
+      ))}
       {c.status === 'awaiting_approval' && (
         <Label anchor="arbiter" className="tag3d paused">
           Arbiter stopped here
@@ -766,7 +907,8 @@ function lensOf(dir: THREE.Vector3): Lens {
 }
 
 // Side panels overlay the canvas; these are the widths they cover (see theme.css).
-export const overlays = (width: number) => ({ left: 316, right: width >= 1300 ? 300 : 0 });
+// The canvas runs under the floating bars and panels; this is how much of it each covers (see theme.css).
+export const overlays = (width: number, dock: boolean) => ({ left: 292, right: width >= 1300 ? 300 : 0, top: 68, bottom: 54 + (dock ? DOCK_H + 12 : 0) });
 
 const INTRO_MS = 3800;
 
@@ -778,7 +920,9 @@ function Director({ layout }: { layout: Layout }) {
   const { camera, size } = useThree();
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; enabled: boolean; addEventListener: (e: string, f: () => void) => void; removeEventListener: (e: string, f: () => void) => void } | null;
   const go = useStore((s) => s.replayGo);
+  const dock = useStore(dockOpen);
   const distance = useRef(14);
+  const shown = useRef<number | null>(null); // the distance the camera is at, easing to the fitted one
   const fit = useMemo(() => new THREE.Vector3(), []);
   const from = useMemo(() => new THREE.Vector3(), []);
   const fromTarget = useMemo(() => new THREE.Vector3(), []);
@@ -789,20 +933,23 @@ function Director({ layout }: { layout: Layout }) {
   const backGoal = useRef(1);
   const started = useRef(performance.now());
   const taken = useRef(false);
+  const lean = useMemo(() => new THREE.Vector3(), []);
+  const look = useMemo(() => new THREE.Vector3(), []);
 
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
-    const { left, right } = overlays(size.width);
+    const { left, right, top, bottom } = overlays(size.width, dock);
     const free = Math.max(360, size.width - left - right);
+    const freeH = Math.max(240, size.height - top - bottom);
     const half = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
-    distance.current = Math.max(SCENE_W / 2 / (half * (free / size.height)), SCENE_H / 2 / half);
+    distance.current = Math.max(SCENE_W / 2 / (half * (free / size.height)), SCENE_H / 2 / (half * (freeH / size.height)));
     fit.copy(TARGET).addScaledVector(VIEW.flow, distance.current);
-    cam.setViewOffset(size.width, size.height, -(left - right) / 2, 0, size.width, size.height);
+    cam.setViewOffset(size.width, size.height, -(left - right) / 2, -(top - bottom) / 2, size.width, size.height);
     cam.updateProjectionMatrix();
     const first = layout.nodes[0].pos;
     fromTarget.set(first.x + 0.6, first.y + LIFT + 0.2, 0);
     from.copy(fromTarget).add(new THREE.Vector3(-1.4, 0.7, 4.2));
-  }, [camera, size.width, size.height, fit, from, fromTarget, layout]);
+  }, [camera, size.width, size.height, fit, from, fromTarget, layout, dock]);
 
   useEffect(() => {
     if (!go) return;
@@ -836,11 +983,24 @@ function Director({ layout }: { layout: Layout }) {
       back.current += (backGoal.current - back.current) * (1 - Math.exp(-dt * 3.2));
       // idle: swing a few degrees either way
       offset.copy(dir).applyAxisAngle(THREE.Object3D.DEFAULT_UP, Math.sin(clock.elapsedTime * 0.22) * 0.07);
-      camera.position.copy(TARGET).addScaledVector(offset, distance.current * back.current);
+      shown.current ??= distance.current;
+      shown.current += (distance.current - shown.current) * (1 - Math.exp(-dt * 2.5));
+      camera.position.copy(TARGET).addScaledVector(offset, shown.current * back.current);
       controls?.target.copy(TARGET);
       camera.lookAt(TARGET);
     } else {
       dir.copy(camera.position).sub(controls?.target ?? TARGET).normalize();
+    }
+    // The breach: lean in towards it and back out, unless the person has taken the camera.
+    const age = performance.now() - moment.at;
+    if (age < PUNCH_MS && !taken.current && !reducedMotion()) {
+      const x = Math.sin(Math.PI * Math.min(1, age / PUNCH_MS));
+      const e = x * x * (3 - 2 * x);
+      lean.copy(camera.position).sub(moment.pos).setLength(3.4).add(moment.pos);
+      camera.position.lerp(lean, 0.55 * e);
+      look.copy(controls?.target ?? TARGET).lerp(moment.pos, 0.7 * e);
+      camera.lookAt(look);
+      if (controls) controls.enabled = false;
     }
     const lens = t < 1 ? 'flow' : lensOf(dir);
     if (lens !== useStore.getState().replayLens) useStore.getState().set({ replayLens: lens });
@@ -854,7 +1014,10 @@ export function CaseScene({ c }: { c: CaseFile }) {
   const layout = useMemo(() => layoutCase(c, limitPreview), [c.id, limitPreview]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <Canvas camera={{ position: [1.6, 2.5, 13], fov: 34 }} dpr={[1, 2]} gl={{ antialias: true }}>
+      {/* Memory: the composer draws the frame, so the canvas needs no multisampled buffer of its own, and
+          the composer's default of 8x MSAA on full-size half-float buffers costs hundreds of MB per
+          canvas. On a laptop whose graphics share the system's RAM, that is the system's RAM. */}
+      <Canvas camera={{ position: [1.6, 2.5, 13], fov: 34 }} dpr={[1, 1.5]} gl={{ antialias: false }}>
         <Director layout={layout} />
         <Projector />
         <color attach="background" args={[BG]} />
@@ -872,7 +1035,7 @@ export function CaseScene({ c }: { c: CaseFile }) {
           dampingFactor={0.08}
           rotateSpeed={0.5}
         />
-        <EffectComposer>
+        <EffectComposer multisampling={2}>
           <Bloom intensity={0.6} luminanceThreshold={0.35} luminanceSmoothing={0.5} mipmapBlur />
           <Vignette eskil={false} offset={0.25} darkness={0.7} />
         </EffectComposer>

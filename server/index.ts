@@ -7,6 +7,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { ClientMsg, EngineInfo, Sabotage, ServerMsg } from '../shared/types';
 import { SCENARIOS } from '../shared/types';
 import { assembleTeam } from './agents/team';
+import { tamperCheck } from './agents/verify';
 import { config } from './config';
 import { buildCase, buildPurchase, cloneWithLimit, type BuildOptions } from './data/scenarios';
 import { CATALOG, MERCHANTS, WIDGET_DOMAINS } from './data/world';
@@ -255,6 +256,10 @@ wss.on('connection', (ws) => {
     } else if (msg.type === 'whatif') {
       const id = whatIf(String(msg.caseId), Number(msg.max));
       if (id) send(ws, { type: 'created', caseId: id, nonce: String(msg.nonce) });
+    } else if (msg.type === 'tamper') {
+      const c = state().cases.get(String(msg.caseId));
+      const result = c ? tamperCheck(c, String(msg.evidenceId), String(msg.field), msg.value) : null;
+      if (result) send(ws, { type: 'tampered', nonce: String(msg.nonce), result });
     } else if (msg.type === 'pace') {
       paused = !!msg.paused;
     }

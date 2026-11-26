@@ -1,5 +1,6 @@
-import type { Citation, CitationCheck, EvidenceKind, EvidenceRecord, Role, Scalar } from '../../shared/types';
-import { recordHash } from '../data/scenarios';
+import type { CaseFile, Citation, CitationCheck, EvidenceKind, EvidenceRecord, Role, Scalar, TamperResult } from '../../shared/types';
+import { ROLES } from '../../shared/types';
+import { recordHash, seal } from '../data/scenarios';
 
 // Plain code, no model: a cited value either matches the stored record or it does not.
 
@@ -49,4 +50,37 @@ export const COVERAGE: Record<Role, { kinds: EvidenceKind[]; what: string }[]> =
 export function missingCoverage(role: Role, caseId: string, citations: Citation[], evidence: Map<string, EvidenceRecord>): string[] {
   const cited = new Set(citations.map((c) => evidence.get(c.evidence_id)).filter((r) => r?.caseId === caseId).map((r) => r!.kind));
   return COVERAGE[role].filter((g) => !g.kinds.some((k) => cited.has(k))).map((g) => g.what);
+}
+
+// Change one field of one record on a copy of the case's records, and run the same checks the
+// Verifier runs. The case on file is never touched: this only shows what an edit would set off.
+export function tamperCheck(c: CaseFile, evidenceId: string, field: string, value: Scalar): TamperResult | null {
+  const copy = c.evidence.map((e) => ({ ...e, data: { ...e.data } }));
+  const target = copy.find((e) => e.id === evidenceId);
+  if (!target || !(field in target.data)) return null;
+  const before = target.data[field];
+  // Keep the field's type, so a number stays a number.
+  const after: Scalar = typeof before === 'number' && Number.isFinite(Number(value)) ? Number(value) : typeof before === 'boolean' ? String(value) === 'true' : value;
+  target.data[field] = after;
+  const broken = copy.filter((e) => e.hash !== recordHash(e.prev, e.id, e.data)).map((e) => e.id);
+  const at = copy.indexOf(target);
+  const resealed = seal(copy.map((e) => ({ ...e })));
+  const records = new Map(copy.map((e) => [e.id, e]));
+  const rejected = ROLES.flatMap((role) =>
+    checkCitations(c.id, c.investigators[role].finding?.citations ?? [], records)
+      .filter((k) => !k.ok)
+      .map((k) => ({ role, evidence_id: k.evidence_id, field: k.field, reason: k.reason ?? 'rejected' })),
+  );
+  return {
+    caseId: c.id,
+    evidenceId,
+    field,
+    before,
+    after,
+    broken,
+    later: copy.slice(at + 1).map((e) => e.id),
+    headOnFile: c.integrity.head,
+    resealedHead: resealed.head,
+    rejected,
+  };
 }

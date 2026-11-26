@@ -7,22 +7,57 @@
   --surface-3: #212124;
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.16);
-  --text: #f2f2f0;
-  --soft: #cfcfcc;
-  --muted: #9c9ca3;
-  --faint: #6a6a71;
+  /* text: one ink at falling strengths, so it takes on the tint of the glass under it */
+  --text: #f5f5f7; /* primary */
+  --soft: rgba(235, 235, 245, 0.84);
+  --muted: rgba(235, 235, 245, 0.62); /* secondary */
+  --faint: rgba(235, 235, 245, 0.42); /* tertiary */
+  --ghost: rgba(235, 235, 245, 0.2); /* quaternary: separators and placeholders */
   --ok: #4fd1a1;
   --breach: #ff5d47;
   --customer: #a593ff;
   --agent: #f0b449;
   --merchant: #5cb8f2;
   --fraud: #f2708d;
-  --top: 56px;
-  --bottom: 34px;
+  --top: 68px; /* the floating top bar and the gap around it */
+  --bottom: 54px; /* the floating engine strip and the gap around it */
+  --dock: 0px; /* the team's cards, when they float over the replay */
   --radius: 10px;
+  /* glass: what is behind shows through, blurred and a little more saturated */
+  /* materials, thickest at the top of the stack: bars and sheets, then panels, then small pills */
+  --glass-thick: rgba(24, 24, 29, 0.62);
+  --glass: rgba(30, 30, 36, 0.46);
+  --glass-thin: rgba(44, 44, 52, 0.38);
+  --glass-strong: rgba(26, 26, 31, 0.68);
+  --blur-thick: blur(34px) saturate(185%);
+  --glass-blur: blur(26px) saturate(175%);
+  --blur-thin: blur(14px) saturate(160%);
+  --glass-edge: rgba(255, 255, 255, 0.13);
+  --glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.16) inset, 0 -1px 0 rgba(255, 255, 255, 0.03) inset, 0 18px 50px rgba(0, 0, 0, 0.42),
+    0 2px 6px rgba(0, 0, 0, 0.25);
+  --fill: rgba(255, 255, 255, 0.07); /* a control sitting on glass */
+  --fill-strong: rgba(255, 255, 255, 0.15);
+  /* corners are concentric: an inner corner is the outer one minus the gap between them */
+  --r-panel: 24px;
+  --r-card: 16px; /* a card 8px inside a panel */
+  --r-control: 10px; /* a control 6px inside a card */
+  /* type, after the text styles of Apple's guidelines */
+  --t-large: 600 26px/1.12 var(--display);
+  --t-title: 650 23px/1.15 var(--display);
+  --t-headline: 600 14px/1.3 var(--sans);
+  --t-body: 400 13.5px/1.45 var(--sans);
+  --t-callout: 400 13px/1.42 var(--sans);
+  --t-subhead: 400 12.5px/1.4 var(--sans);
+  --t-footnote: 500 12px/1.35 var(--sans);
+  --t-caption: 500 11px/1.3 var(--sans);
+  /* motion: springs that settle without wobbling, and one ease for everything else */
+  --spring: cubic-bezier(0.3, 1.5, 0.5, 1);
+  --spring-soft: cubic-bezier(0.2, 0.9, 0.25, 1.05);
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter Variable', 'Helvetica Neue', system-ui, sans-serif;
   --display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter Variable', 'Helvetica Neue', system-ui, sans-serif;
-  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'IBM Plex Mono', monospace;
+  /* one typeface throughout: ids, citations and hashes use it too, with figures of equal width */
+  --mono: var(--sans);
 }
 
 * {
@@ -90,8 +125,7 @@ label {
 
 .mono {
   font-family: var(--mono);
-  font-size: 0.92em;
-  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 ::-webkit-scrollbar {
@@ -133,7 +167,7 @@ label {
   inset: 0;
 }
 .app.engine-open {
-  --bottom: 176px;
+  --bottom: 196px;
 }
 
 .stage.live {
@@ -253,13 +287,6 @@ label {
   gap: 8px;
   border-color: var(--text);
 }
-.btn.wait i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text);
-  animation: blink 1.2s ease-in-out infinite;
-}
 .btn.small {
   height: 26px;
   padding: 0 9px;
@@ -313,25 +340,6 @@ select option {
   letter-spacing: -0.02em;
 }
 
-.crumbs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-left: 18px;
-  border-left: 1px solid var(--line);
-  color: var(--muted);
-  white-space: nowrap;
-}
-.crumbs button:hover {
-  color: var(--text);
-}
-.crumbs i {
-  font-style: normal;
-  color: var(--faint);
-}
-.crumbs .mono {
-  color: var(--text);
-}
 
 .metrics {
   display: flex;
@@ -492,7 +500,7 @@ select option {
 }
 .case-row.awaiting_approval {
   background: rgba(255, 255, 255, 0.045);
-  box-shadow: inset 2px 0 0 var(--text);
+  box-shadow: none;
 }
 .case-row .l1,
 .case-row .l3 {
@@ -522,12 +530,6 @@ select option {
 .case-row .l3 {
   font-size: 12px;
 }
-.case-row .id {
-  margin-left: auto;
-  white-space: nowrap;
-  color: var(--faint);
-  font-size: 11px;
-}
 
 /* where a case stands: a dot and a few words */
 .state {
@@ -540,15 +542,6 @@ select option {
   color: var(--soft);
   font-size: 12px;
   white-space: nowrap;
-}
-.state i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--c, var(--text));
-}
-.state.open i {
-  animation: blink 1.4s ease-in-out infinite;
 }
 .state.closed {
   color: var(--c, var(--soft));
@@ -779,7 +772,7 @@ select option {
 }
 .case-info {
   left: 14px;
-  width: 288px;
+  width: 264px;
 }
 .inspector {
   right: 14px;
@@ -788,17 +781,18 @@ select option {
 
 .replay-lens {
   position: absolute;
-  left: 330px;
+  left: 306px;
   right: 14px;
   bottom: 10px;
   display: flex;
-  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   z-index: 6;
   pointer-events: none;
 }
-.replay-lens .seg {
+.replay-lens .seg,
+.replay-lens .dock-toggle {
   pointer-events: auto;
 }
 
@@ -840,7 +834,6 @@ select option {
 blockquote {
   margin: 16px 0 0;
   padding: 2px 0 2px 12px;
-  border-left: 2px solid var(--customer);
   font-size: 14px;
   line-height: 1.45;
   color: var(--text);
@@ -861,8 +854,6 @@ blockquote.held label {
 }
 .mandate {
   margin-top: 14px;
-  padding: 2px 0 2px 12px;
-  border-left: 2px solid var(--ok);
 }
 .mandate label {
   display: block;
@@ -1004,6 +995,74 @@ blockquote.held label {
 .seal.bad span:last-child {
   color: var(--breach);
 }
+
+/* trying a change on a sealed record */
+.tamper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+}
+.tamper > label {
+  font-size: 11px;
+  color: var(--faint);
+}
+.tamper-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+}
+.tamper select,
+.tamper input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.tamper .btn {
+  height: 28px;
+  font-size: 12px;
+}
+.tamper .btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tamper-result {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--breach) 55%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--breach) 9%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  animation: rise 0.3s ease both;
+}
+.tamper-result b {
+  color: var(--text);
+  font-weight: 600;
+}
+.tamper-result ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tamper-result li {
+  padding-left: 0;
+  margin-top: 4px;
+}
+.tamper-result small {
+  color: var(--faint);
+  font-size: 11px;
+}
 .hint {
   margin-top: 10px;
   color: var(--faint);
@@ -1068,12 +1127,6 @@ blockquote.held label {
   background: #e2e2df;
   font-size: 10.5px;
   color: #5d5d66;
-}
-.browser .chrome i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #bcbcb8;
 }
 .browser .chrome span {
   margin-left: 6px;
@@ -1158,7 +1211,6 @@ blockquote.held label {
   font-size: 12.5px;
   line-height: 1.45;
   color: #f0e9ff;
-  text-shadow: 0 0 12px rgba(190, 150, 255, 0.8);
 }
 .page .tip {
   margin-top: 6px;
@@ -1174,6 +1226,28 @@ blockquote.held label {
   height: 268px;
   border-top: 1px solid var(--line);
   background: var(--surface);
+  transition: height 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+/* while the journey is drawn, the replay has the screen */
+.dock.closed {
+  height: 0;
+  overflow: hidden;
+  border-top-color: transparent;
+}
+.dock-toggle {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dock-toggle:hover {
+  color: var(--text);
+  border-color: var(--text);
 }
 .inv-row {
   display: grid;
@@ -1202,13 +1276,6 @@ blockquote.held label {
   gap: 7px;
   font-size: 13.5px;
   font-weight: 600;
-}
-.inv .head b::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--c);
 }
 .inv .q {
   display: block;
@@ -1282,8 +1349,7 @@ blockquote.held label {
   flex-direction: column;
   gap: 3px;
   margin-top: 10px;
-  padding: 2px 0 2px 10px;
-  border-left: 2px solid var(--from);
+  padding: 0;
   font-size: 12px;
   color: var(--muted);
 }
@@ -1365,10 +1431,6 @@ blockquote.held label {
   font-size: 12px;
   color: var(--muted);
 }
-.bar-title .code {
-  font-size: 11px;
-  color: var(--muted);
-}
 .bar {
   display: flex;
   gap: 2px;
@@ -1415,7 +1477,6 @@ blockquote.held label {
 .bar.empty > .slot.reading,
 .bar.empty > .slot.submitted {
   border-bottom-color: var(--c);
-  animation: blink 0.9s ease-in-out infinite;
 }
 .bar.empty > .slot.verified {
   border-bottom-color: var(--c);
@@ -1446,14 +1507,12 @@ blockquote.held label {
 }
 .outcome.blocked {
   background: color-mix(in srgb, var(--breach) 14%, transparent);
-  box-shadow: inset 2px 0 0 var(--breach);
 }
 .outcome.blocked b {
   color: var(--breach);
 }
 .outcome.released {
   background: color-mix(in srgb, var(--ok) 12%, transparent);
-  box-shadow: inset 2px 0 0 var(--ok);
 }
 .outcome.released b {
   color: var(--ok);
@@ -1462,7 +1521,7 @@ blockquote.held label {
 /* a ruling that needs a person: laid over the foot of the replay */
 .approval-banner {
   position: absolute;
-  left: calc(316px + (100% - 316px) / 2);
+  left: calc(292px + (100% - 292px) / 2);
   bottom: 14px;
   transform: translateX(-50%);
   display: flex;
@@ -1498,14 +1557,6 @@ blockquote.held label {
   color: var(--text);
   font-size: 14px;
   font-weight: 600;
-}
-.approval-banner .what i {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text);
-  animation: blink 1.2s ease-in-out infinite;
 }
 .approval-banner .proposal {
   display: flex;
@@ -1555,12 +1606,6 @@ blockquote.held label {
   padding: 5px 0;
   border-top: 1px solid var(--line);
   font-size: 12.5px;
-}
-.settlement i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: none;
 }
 .settlement .lbl {
   white-space: nowrap;
@@ -1622,11 +1667,6 @@ blockquote.held label {
 .tag3d.limit b {
   font-weight: 600;
 }
-.tag3d.axis {
-  transform: translate(-100%, -50%) translateX(-10px);
-  color: var(--faint);
-  font-size: 11.5px;
-}
 .tag3d.step {
   display: flex;
   align-items: center;
@@ -1657,21 +1697,11 @@ blockquote.held label {
   border-color: var(--text);
   color: var(--text);
 }
-.tag3d .dots {
-  display: inline-flex;
-  gap: 2px;
-}
-.tag3d .dots i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-}
 .tag3d.probe {
   transform: translate(12px, -50%);
   display: flex;
   flex-direction: column;
-  padding-left: 7px;
-  border-left: 2px solid var(--c);
+  padding-left: 0;
   font-size: 11px;
   line-height: 1.25;
   color: var(--muted);
@@ -1679,7 +1709,7 @@ blockquote.held label {
   text-shadow: 0 1px 6px var(--bg), 0 0 2px var(--bg);
 }
 .tag3d.probe b {
-  color: var(--text);
+  color: var(--c); /* the investigator's colour, now that the label has no side bar */
   font-weight: 600;
   font-size: 11.5px;
 }
@@ -1691,7 +1721,7 @@ blockquote.held label {
 .replay-fact {
   position: absolute;
   top: 14px;
-  left: calc(316px + (100% - 316px) / 2);
+  left: calc(292px + (100% - 292px) / 2);
   transform: translateX(-50%);
   display: flex;
   align-items: baseline;
@@ -1719,18 +1749,8 @@ blockquote.held label {
   font-weight: 600;
   color: var(--text);
 }
-.replay-fact b::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ok);
-}
 .replay-fact.breach {
   border-color: color-mix(in srgb, var(--breach) 60%, transparent);
-}
-.replay-fact.breach b::before {
-  background: var(--breach);
 }
 .replay-fact em {
   font-style: normal;
@@ -1782,16 +1802,6 @@ blockquote.held label {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-}
-.engine-toggle .live::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--faint);
-}
-.engine-toggle .live.live::before {
-  background: var(--ok);
 }
 .engine .lanes {
   flex: 1;
@@ -1978,10 +1988,10 @@ blockquote.held label {
 @media (min-width: 1300px) {
   .replay-fact,
   .approval-banner {
-    left: calc(316px + (100% - 616px) / 2);
+    left: calc(292px + (100% - 592px) / 2);
   }
   .approval-banner {
-    max-width: calc(100% - 644px);
+    max-width: calc(100% - 620px);
   }
   .replay-lens {
     right: 300px;
@@ -2120,7 +2130,18 @@ blockquote.held.network button {
 /* ───────── the globe ───────── */
 
 .net-name.city {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(10, 10, 14, 0.74);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 4px 14px rgba(0, 0, 0, 0.45);
   transition: opacity 0.2s ease;
+}
+.net-name.city:has(span) {
+  border-radius: 12px;
+  padding: 5px 10px;
 }
 .net-name.city.below {
   transform: translate(-50%, 9px);
@@ -2147,9 +2168,8 @@ blockquote.held.network button {
 .net-name.city b {
   font-size: 12px;
 }
-.net-name.city.on b {
-  color: #fff;
-  text-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+.net-name.city.on {
+  border-color: rgba(255, 255, 255, 0.45);
 }
 .focus-chip {
   display: flex;
@@ -2179,4 +2199,777 @@ blockquote.held.network button {
 }
 .focus-chip:hover {
   border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* the sealed records under the replay */
+.tag3d.chain {
+  transform: translate(-50%, 0);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  pointer-events: none !important;
+}
+.tag3d.chain.sel {
+  color: var(--text);
+}
+.tag3d.chain.broken {
+  color: var(--breach);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+
+/* ═════════════════════════ liquid glass ═════════════════════════
+   The scenes run under everything; bars, panels and cards float over them as glass. Each glass
+   surface blurs and saturates what is behind it, catches light along its top edge, and has a thin
+   rim that is brightest at its corners. Controls on glass are pills. */
+
+/* the scenes fill the window, under the bars */
+.stage.live {
+  inset: 0;
+}
+.case-view {
+  inset: 0;
+  display: block;
+}
+.case-view .stage {
+  position: absolute;
+  inset: 0;
+}
+.case-view.dock-open {
+  --dock: calc(268px + 12px);
+}
+
+/* every glass surface */
+.topbar,
+.engine,
+.cases,
+.case-info,
+.inspector,
+.dock,
+.modal,
+.approval-banner,
+.replay-fact,
+.offline,
+.dock-toggle,
+.seg,
+.tabs,
+.focus-chip {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.015) 38%, rgba(255, 255, 255, 0)), var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+}
+/* the rim: light caught at the corners, fading along the edges (not on panels that scroll themselves,
+   where it would scroll away with their content) */
+.topbar::before,
+.engine::before,
+.cases::before,
+.dock::before,
+.modal::before,
+.approval-banner::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.07) 22%, rgba(255, 255, 255, 0) 50%, rgba(255, 255, 255, 0.07) 78%, rgba(255, 255, 255, 0.32));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* top bar: a floating slab */
+.topbar {
+  inset: 10px 12px auto 12px;
+  height: calc(var(--top) - 20px);
+  border-radius: 18px;
+  padding: 0 8px 0 14px;
+  gap: 14px;
+}
+.metric,
+.controls {
+  border-left-color: rgba(255, 255, 255, 0.07);
+}
+.metric label {
+  font-size: 11px;
+  color: var(--faint);
+  letter-spacing: 0;
+}
+.metric b {
+  font-size: 16px;
+  letter-spacing: -0.025em;
+}
+
+/* engine strip: a slab along the bottom */
+.engine {
+  inset: auto 12px 10px 12px;
+  height: calc(var(--bottom) - 20px);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.engine .strip {
+  height: 34px;
+}
+
+/* panels */
+.cases,
+.case-info,
+.inspector {
+  border-radius: var(--r-panel);
+}
+.cases {
+  top: var(--top);
+  bottom: var(--bottom);
+  right: 12px;
+}
+.case-info,
+.inspector {
+  top: var(--top);
+  max-height: calc(100% - var(--top) - var(--bottom) - var(--dock) - 12px);
+}
+.case-info {
+  left: 12px;
+}
+.inspector {
+  right: 12px;
+}
+.cases header {
+  padding: 12px 12px 10px;
+  border-bottom: 0;
+}
+
+/* the team's cards float over the bottom of the replay */
+.dock {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: var(--bottom);
+  border-radius: var(--r-panel);
+  overflow: hidden;
+  z-index: 15;
+  transition:
+    transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.4s ease;
+}
+.dock.closed {
+  height: 268px;
+  transform: translateY(24px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  border-top-color: var(--glass-edge);
+}
+.inv {
+  border-right-color: rgba(255, 255, 255, 0.06);
+}
+.approval-banner {
+  bottom: calc(var(--bottom) + var(--dock) + 12px);
+}
+.replay-lens {
+  bottom: calc(var(--bottom) + var(--dock) + 14px);
+}
+.replay-fact {
+  top: var(--top);
+  border-radius: 999px;
+  padding: 8px 16px;
+}
+.replay-fact.breach {
+  border-color: color-mix(in srgb, var(--breach) 55%, transparent);
+  box-shadow: var(--glass-shadow);
+}
+.approval-banner {
+  border-radius: 20px;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.modal {
+  position: relative;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 30%), var(--glass-strong);
+}
+.modal-back {
+  background: rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.offline {
+  border-radius: 999px;
+}
+
+/* pills: segmented controls and tabs */
+.seg,
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+}
+.tabs {
+  background: var(--fill);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+.seg button,
+.tabs button {
+  padding: 5px 13px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  transition:
+    background 0.25s ease,
+    color 0.2s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.seg button:hover,
+.tabs button:hover {
+  color: var(--text);
+}
+.seg button:active,
+.tabs button:active {
+  transform: scale(0.95);
+}
+.seg button.on,
+.tabs button.on {
+  background: var(--fill-strong);
+  border: 0;
+  border-bottom: 0;
+  color: var(--text);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* buttons */
+.btn {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--fill);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.btn:hover {
+  background: var(--fill-strong);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.btn:active {
+  transform: scale(0.96);
+}
+.btn.primary {
+  background: var(--text);
+  border-color: transparent;
+  box-shadow: none;
+}
+.btn.primary:disabled {
+  background: var(--fill);
+  box-shadow: none;
+}
+.btn.small {
+  height: 28px;
+  padding: 0 12px;
+}
+.icon {
+  border-radius: 999px;
+  transition:
+    background 0.2s ease,
+    transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.icon:hover {
+  background: var(--fill-strong);
+}
+.icon:active {
+  transform: scale(0.92);
+}
+.dock-toggle {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: var(--soft);
+  font: var(--t-footnote);
+}
+.dock-toggle:hover {
+  color: var(--text);
+}
+select,
+.tamper select,
+.tamper input {
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+select option {
+  background: #1c1c21;
+}
+.chip {
+  border-radius: 999px;
+}
+
+/* choices in the simulator: cards on glass */
+.options button,
+.toggle button {
+  border-radius: var(--r-card);
+  background: var(--fill);
+  border-color: rgba(255, 255, 255, 0.07);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.3s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.options button:active,
+.toggle button:active {
+  transform: scale(0.97);
+}
+.options button.on,
+.toggle button.on {
+  background: var(--fill-strong);
+  border-color: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+}
+
+/* rows and cards on glass */
+.case-row {
+  width: calc(100% - 16px);
+  margin: 0 8px 2px;
+  padding: 11px 12px 10px;
+  border-radius: var(--r-card);
+  border-bottom: 0;
+  transition:
+    background 0.2s ease,
+    transform 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.case-row:hover,
+.case-row.hot {
+  background: var(--fill);
+}
+.case-row:active {
+  transform: scale(0.985);
+}
+.case-row.awaiting_approval {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.focus-chip {
+  border-radius: 999px;
+  width: calc(100% - 16px);
+  margin: 2px 8px 8px;
+  padding: 8px 14px;
+}
+
+/* type: large and tight for titles, quiet secondary text */
+.case-info h2 {
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.028em;
+}
+.modal h2 {
+  letter-spacing: -0.03em;
+}
+h3 {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* labels inside the scenes read on any background */
+.tag3d.step,
+.tag3d.probe,
+.net-note {
+  background: rgba(22, 22, 27, 0.72);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1) inset, 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.tag3d.step {
+  padding: 3px 10px;
+}
+.net-note.learned {
+  background: rgba(255, 255, 255, 0.9);
+}
+.net-note.caught {
+  background: color-mix(in srgb, var(--breach) 88%, transparent);
+}
+
+/* the scene fades in under the bars */
+.stage.live .labels,
+.case-view .labels {
+  z-index: 5;
+}
+
+/* narrower windows: the top bar keeps everything on one line */
+.btn.wait .narrow {
+  display: none;
+}
+@media (max-width: 1240px) {
+  .topbar {
+    gap: 10px;
+  }
+  .metric {
+    padding: 0 12px;
+  }
+  .btn.wait .wide {
+    display: none;
+  }
+  .btn.wait .narrow {
+    display: inline;
+  }
+}
+@media (max-width: 1080px) {
+  .metric b {
+    font-size: 14.5px;
+  }
+  .metric label {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* no blur where the browser cannot do it: plain, darker glass */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .topbar,
+  .engine,
+  .cases,
+  .case-info,
+  .inspector,
+  .dock,
+  .modal,
+  .approval-banner,
+  .replay-fact {
+    background: var(--glass-strong);
+  }
+}
+
+
+/* ═════════════════════════ the finer points ═════════════════════════ */
+
+/* 1. type: each kind of text keeps one style everywhere */
+body {
+  font: var(--t-body);
+  letter-spacing: -0.008em;
+}
+h3 {
+  font: var(--t-footnote);
+  letter-spacing: 0.005em;
+  color: var(--muted);
+}
+label,
+.metric label {
+  font: var(--t-caption);
+  letter-spacing: 0.01em;
+}
+.case-info h2 {
+  font: var(--t-title);
+  letter-spacing: -0.028em;
+}
+.modal h2 {
+  font: var(--t-large);
+  letter-spacing: -0.03em;
+}
+.case-row .item,
+.inv .head b,
+.bar-title h3 {
+  font: var(--t-headline);
+  letter-spacing: -0.012em;
+}
+.case-row .l2,
+.case-info blockquote,
+.mandate p {
+  font: var(--t-callout);
+}
+.case-row .l3,
+.tag3d.step,
+.dock-toggle {
+  font: var(--t-footnote);
+}
+
+/* 2. separators are the faintest level of ink */
+.cases header,
+.inv,
+.feed > div,
+.seal,
+.tamper {
+  border-color: var(--ghost);
+}
+
+/* 3. figures keep their width, so a changing amount never shifts the text around it */
+.metric b,
+.amount,
+.money,
+.case-row .amount,
+.tag3d b,
+.net-note,
+.replay-fact span,
+.tamper input,
+.inv .score,
+.settlement,
+.whatif label b,
+.engine-toggle b {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 4. concentric corners */
+.case-row,
+.options button,
+.toggle button,
+.focus-chip {
+  border-radius: var(--r-card);
+}
+.tamper select,
+.tamper input,
+select,
+.chip,
+.tamper-result {
+  border-radius: var(--r-control);
+}
+.tamper-result {
+  border-radius: 12px;
+}
+
+/* 5. materials: the bars and sheets are thickest, small pills thinnest */
+.topbar,
+.engine,
+.modal {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015) 40%, rgba(255, 255, 255, 0)), var(--glass-thick);
+  -webkit-backdrop-filter: var(--blur-thick);
+  backdrop-filter: var(--blur-thick);
+}
+.replay-fact,
+.dock-toggle,
+.seg,
+.focus-chip,
+.offline {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)), var(--glass-thin);
+  -webkit-backdrop-filter: var(--blur-thin);
+  backdrop-filter: var(--blur-thin);
+}
+
+/* 6. scroll edges: content fades out under the edge of its panel instead of being cut (only where the
+   scrolling part sits inside the glass; a mask on the panel itself would fade its frame too) */
+.cases .scroll,
+.inv,
+.verdict {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 22px), transparent 100%);
+}
+
+/* 8. a sheet: what is behind it steps back while it is open */
+.app > .stage,
+.app > .case-view,
+.app > .cases,
+.app > .topbar,
+.app > .engine {
+  transition:
+    transform 0.45s var(--spring-soft),
+    filter 0.45s var(--ease);
+}
+.app:has(.modal-back) > .stage,
+.app:has(.modal-back) > .case-view,
+.app:has(.modal-back) > .cases,
+.app:has(.modal-back) > .engine {
+  transform: scale(0.97);
+  filter: brightness(0.6) saturate(0.8);
+}
+.app:has(.modal-back) > .topbar {
+  filter: brightness(0.6);
+}
+.modal {
+  animation: sheet 0.5s var(--spring-soft) both;
+}
+@keyframes sheet {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.96);
+  }
+}
+
+/* 9. motion: every press, hover and toggle uses the same spring */
+.btn,
+.icon,
+.seg button,
+.tabs button,
+.case-row,
+.options button,
+.toggle button,
+.chip,
+.dock-toggle {
+  transition-timing-function: var(--spring);
+}
+.chip:active,
+.dock-toggle:active {
+  transform: scale(0.95);
+}
+
+/* 10. focus: a soft ring that follows the shape of the control, for the keyboard only */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 3px;
+}
+input:focus,
+select:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* 14. loading: the shape of what is coming, instead of a sentence */
+.case-row.skeleton {
+  pointer-events: none;
+  animation: none;
+}
+.case-row.skeleton i {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--fill) 0%, rgba(255, 255, 255, 0.13) 50%, var(--fill) 100%) 0 0 / 300% 100%;
+  animation: shimmer 1.6s var(--ease) infinite;
+}
+.case-row.skeleton i + i {
+  margin-top: 8px;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+.offline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 14px;
+  color: var(--soft);
+}
+.offline::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--ghost);
+  border-top-color: var(--text);
+  animation: spin 0.8s linear infinite;
+}
+
+/* 15. small controls answer to a larger area than they draw */
+.icon,
+.chip,
+.btn.small,
+.seg button,
+.tabs button {
+  position: relative;
+}
+.icon::after,
+.chip::after,
+.btn.small::after,
+.seg button::after,
+.tabs button::after {
+  content: '';
+  position: absolute;
+  inset: -6px -3px;
+}
+
+/* 11. less motion, when asked for */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .app:has(.modal-back) > * {
+    transform: none !important;
+  }
+}
+
+/* 12. less transparency, when asked for: solid materials */
+@media (prefers-reduced-transparency: reduce) {
+  .topbar,
+  .engine,
+  .modal,
+  .cases,
+  .case-info,
+  .inspector,
+  .dock,
+  .approval-banner,
+  .replay-fact,
+  .dock-toggle,
+  .seg,
+  .focus-chip,
+  .offline,
+  .tag3d.step,
+  .tag3d.probe,
+  .net-note {
+    background: #1d1d22;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* 13. more contrast, when asked for: firmer edges and stronger secondary text */
+@media (prefers-contrast: more) {
+  :root {
+    --glass-edge: rgba(255, 255, 255, 0.4);
+    --soft: rgba(235, 235, 245, 0.95);
+    --muted: rgba(235, 235, 245, 0.82);
+    --faint: rgba(235, 235, 245, 0.66);
+    --ghost: rgba(235, 235, 245, 0.4);
+  }
+}
+
+/* the top bar: no separators between its groups, space does that */
+.metric,
+.controls {
+  border-left: 0;
+}
+.controls .sep {
+  display: none;
+}
+
+/* where a 3D scene would be, when the browser cannot draw one */
+.no-3d {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 380px 0 32px;
+  text-align: center;
+  color: var(--muted);
+}
+.no-3d b {
+  font: var(--t-headline);
+  color: var(--text);
+}
+.no-3d span {
+  max-width: 360px;
+  font: var(--t-callout);
+}
+
+/* a re-run with a different limit says so; nothing else trails the status in a row */
+.whatif-tag {
+  margin-left: auto;
+  font: var(--t-caption);
+  color: var(--faint);
 }
