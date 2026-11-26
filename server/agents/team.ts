@@ -647,7 +647,7 @@ function createNetwork(): Agent {
           publish('signature.updated', me, { id: sig.id });
           return;
         }
-        if (c.status !== 'ruled' && c.status !== 'blocked') return;
+        if (!config.networkLearning || (c.status !== 'ruled' && c.status !== 'blocked')) return;
         const mark = learnable(c, ruling);
         if (!mark || s.signatures.has(mark.id)) return;
         s.signatures.set(mark.id, { ...mark, learnedFrom: c.id, merchant: c.purchase.merchant.name, at: Date.now(), catches: 0, prevented: 0 });

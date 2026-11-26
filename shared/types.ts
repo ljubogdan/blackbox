@@ -237,7 +237,7 @@ export type ServerMsg =
 
 export type ClientMsg =
   | { type: 'approve'; caseId: string; approved: boolean }
-  | { type: 'trigger'; scenario: string }
+  | { type: 'trigger'; scenario: string; stage?: 'hold' | 'dispute'; nonce?: string }
   | { type: 'pace'; paused: boolean }
   | { type: 'custom'; nonce: string; spec: CustomSpec }
   | { type: 'whatif'; nonce: string; caseId: string; max: number };

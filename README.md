@@ -24,6 +24,7 @@ Open http://localhost:5173. No API key is needed: without one, the agents run on
 
 ```bash
 npm run proof        # headless: run 8 disputes, print rulings and measured concurrency
+npm run eval         # score the team on every kind of case (see Measuring accuracy)
 npm test             # the Verifier, the hash chain, the Ledger's sums, and tool calls in the loop
 npm run start        # production build, served by the engine on http://localhost:8787
 ```
@@ -119,6 +120,19 @@ When a provider says no, the guarded runner ([server/model/guard.ts](server/mode
 
 Gemini 3 models sign each function call and reject the next request unless the signature is sent back. Mozaik's Gemini mapper drops it, so [server/model/gemini.ts](server/model/gemini.ts) keeps the signatures and returns them.
 
+## Measuring accuracy
+
+`npm run proof` shows the system working, but its "matches the ground truth" line is not a measure of accuracy: it counts payments the network blocked on a learned signature, which no model decided, and the mix of cases depends on the stream.
+
+`npm run eval` is the measure. It starts the engine with no stream (`STREAM=off`) and no network learning (`NETWORK=off`), so every case goes through the team. It runs each of the 12 kinds of case (six faults as disputes, five as holds, one clean hold) the same number of times, and for each kind prints how many rulings were right and how far the split was from the ground truth on average. A held payment is right if it was blocked or released correctly; a dispute is right if the party with the largest share is the right one. Every case, with its findings and log, is written to `eval-results/`.
+
+```bash
+npm run eval          # each kind once: 12 cases
+npm run eval -- 3     # each kind three times: 36 cases
+```
+
+A case takes about 15 model calls, so one round of 12 is about 180 calls. That is far beyond a free Gemini key (20 requests a day per model); a live eval needs a paid key. In scripted mode the eval runs for free and scores 12 of 12, which only shows the harness works.
+
 ## Synthetic data
 
 [server/data/scenarios.ts](server/data/scenarios.ts) generates six kinds of dispute, seeded by `SEED`:
@@ -155,7 +169,7 @@ tests/             node:test suites, run with npm test
 
 ## Known gaps
 
-- Live mode has completed a single case. Gemini's free tier allows 20 requests a day per model, and a case takes 10 to 15, so a free key runs about one case per model per day; a rehearsal of the whole demo needs a paid key. `MAX_RPM` paces calls for low quotas, and `INVESTIGATOR_MODEL` / `ARBITER_MODEL` pick the models.
+- Live mode has completed a single case, and `npm run eval` has not yet been run against a real model. Gemini's free tier allows 20 requests a day per model, and a case takes 10 to 15, so a free key runs about one case per model per day; a rehearsal of the whole demo needs a paid key. `MAX_RPM` paces calls for low quotas, and `INVESTIGATOR_MODEL` / `ARBITER_MODEL` pick the models.
 - Not exercised in a browser yet: the evidence-pack download and the sound cues.
 - Mozaik's loop runs only the first tool call of a model response. When a model asks for several at once, the guarded runner ([server/model/guard.ts](server/model/guard.ts)) hands the rest to the loop one at a time, so each is run, intercepted and recorded without another model call. This is covered by a test against Mozaik's loop with a scripted model, but not yet by a real provider: the scripted stand-in only ever returns one call per inference.
 - Nothing is persisted: restarting the engine starts a new run.

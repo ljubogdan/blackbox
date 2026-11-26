@@ -244,8 +244,9 @@ wss.on('connection', (ws) => {
     if (msg.type === 'approve') {
       // The human's decision enters the runtime as an event from the Risk officer.
       publish('approval.decided', team.officer.getId(), { caseId: msg.caseId, approved: !!msg.approved });
-    } else if (msg.type === 'trigger' && (SCENARIOS as readonly string[]).includes(msg.scenario)) {
-      openCase(msg.scenario as Sabotage);
+    } else if (msg.type === 'trigger' && (msg.scenario === 'clean' || (SCENARIOS as readonly string[]).includes(msg.scenario))) {
+      const id = openCase(msg.scenario as Sabotage, msg.stage ? { stage: msg.stage === 'hold' ? 'hold' : 'dispute' } : {});
+      if (id && msg.nonce) send(ws, { type: 'created', caseId: id, nonce: String(msg.nonce) });
     } else if (msg.type === 'custom') {
       const { item, max, sabotage, stage } = msg.spec ?? ({} as never);
       const valid = sabotage === 'clean' || (SCENARIOS as readonly string[]).includes(sabotage);
@@ -263,6 +264,7 @@ wss.on('connection', (ws) => {
 server.listen(config.port, () => {
   console.log(`Blackbox engine on http://localhost:${config.port}  ·  mode: ${info.mode}  ·  model: ${info.model}`);
   console.log(`Participants: ${team.roster.map((p) => `${p.name} (${p.kind})`).join(', ')}`);
+  if (!config.stream) return;
   tickPurchase();
   setTimeout(() => openCase('injection', { stage: 'hold' }), 1800);
   setInterval(disputeTick, config.disputeEveryMs);

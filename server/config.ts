@@ -40,4 +40,8 @@ export const config = {
   // Live mode only: provider requests-per-minute cap; calls are spaced to stay under it. 0 = no pacing.
   maxRpm: live ? num(env.MAX_RPM, 0) : 0,
   maxAttempts: 3,
+  // STREAM=off: open no cases on a timer, only on request (npm run eval).
+  stream: env.STREAM !== 'off',
+  // NETWORK=off: learn no attack signatures, so every case is decided by the team rather than by a match.
+  networkLearning: env.NETWORK !== 'off',
 };

@@ -8,6 +8,7 @@
     "build": "vite build",
     "start": "vite build && tsx server/index.ts",
     "proof": "tsx scripts/proof.ts",
+    "eval": "tsx scripts/eval.ts",
     "typecheck": "tsc",
     "test": "tsx --test \"tests/*.test.ts\""
   },
