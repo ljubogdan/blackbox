@@ -74,10 +74,12 @@ export const glassShader = {
   fragmentShader: /* glsl */ `
     varying vec2 vUv;
     void main() {
-      vec2 e = abs(vUv * 2.0 - 1.0);
+      // Seen exactly edge-on, a face has no area and its uv can run far outside 0..1. Raised to
+      // the sixth power that overflows, and the glow turned the overflow into bright blobs.
+      vec2 e = abs(clamp(vUv, 0.0, 1.0) * 2.0 - 1.0);
       float edge = max(e.x, e.y);
       float rim = edge * edge * edge * edge * edge * edge;
-      gl_FragColor = vec4(vec3(0.95, 0.95, 0.94), 0.012 + 0.06 * rim);
+      gl_FragColor = vec4(vec3(0.95, 0.95, 0.94), clamp(0.012 + 0.06 * rim, 0.0, 0.072));
     }`,
 };
 
