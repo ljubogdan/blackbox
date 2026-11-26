@@ -1,7 +1,6 @@
 import { Line, OrbitControls } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Bloom, EffectComposer, Noise, Vignette } from '@react-three/postprocessing';
-import { BlendFunction } from 'postprocessing';
+import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { CaseFile, Role, TrailStep } from '../../../shared/types';
@@ -656,7 +655,6 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
     <LabelLayer>
       <Label anchor="limit" className="tag3d limit">
         <b>Limit {eur(layout.max)}</b>
-        <span className="src">{layout.mndId}.max_amount</span>
       </Label>
       <Label anchor="axis" className="tag3d axis">
         €0
@@ -712,9 +710,6 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
             <b>Went over the limit</b>
             <span>
               {eur(over)} over at “{KIND_WORD[b.node.kind]}”
-              <em>
-                {b.node.evidenceId} − {layout.mndId}.max_amount
-              </em>
             </span>
           </>
         )}
@@ -723,7 +718,6 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
             <b>Left the owner’s session</b>
             <span>
               a different device took over at step {b.node.key.slice(1)}
-              <em>{b.node.evidenceId}</em>
             </span>
           </>
         )}
@@ -732,9 +726,6 @@ function ReplayLabels({ c, layout }: { c: CaseFile; layout: Layout }) {
             <b>Stayed inside the mandate</b>
             <span>
               {eur(layout.total)} charged against a limit of {eur(layout.max)}
-              <em>
-                {layout.ordId}.total · {layout.mndId}.max_amount
-              </em>
             </span>
           </>
         )}
@@ -871,7 +862,6 @@ export function CaseScene({ c }: { c: CaseFile }) {
         />
         <EffectComposer>
           <Bloom intensity={0.6} luminanceThreshold={0.35} luminanceSmoothing={0.5} mipmapBlur />
-          <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.35} />
           <Vignette eskil={false} offset={0.25} darkness={0.7} />
         </EffectComposer>
       </Canvas>

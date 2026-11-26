@@ -1,7 +1,6 @@
 import { MeshReflectorMaterial, OrbitControls } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Bloom, EffectComposer, Noise, Vignette } from '@react-three/postprocessing';
-import { BlendFunction } from 'postprocessing';
+import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { CaseFile, Party } from '../../../shared/types';
@@ -754,7 +753,6 @@ export function GateScene() {
         <OrbitControls makeDefault enablePan={false} enableZoom={false} target={TARGET} minPolarAngle={0.05} maxPolarAngle={1.5} enableDamping dampingFactor={0.08} rotateSpeed={0.5} />
         <EffectComposer>
           <Bloom intensity={0.55} luminanceThreshold={0.35} luminanceSmoothing={0.5} mipmapBlur />
-          <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.35} />
           <Vignette eskil={false} offset={0.25} darkness={0.7} />
         </EffectComposer>
       </Canvas>

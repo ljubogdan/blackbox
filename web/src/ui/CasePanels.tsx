@@ -209,9 +209,7 @@ export function Inspector({ c }: { c: CaseFile }) {
             <span>{c.integrity.ok ? `sealed · chain of ${c.integrity.records} verified` : 'chain broken'}</span>
           </div>
         </div>
-      ) : (
-        <p className="hint">Click a step in the replay, or a citation, to open its source record.</p>
-      )}
+      ) : null}
       <div className="feed">
         <h3>Activity</h3>
         {c.log
@@ -293,12 +291,6 @@ export function Verdict({ c }: { c: CaseFile }) {
         </div>
       )}
       {c.status === 'manual_review' && <p className="rationale">This case was moved to manual review. No ruling was recorded and no money was assigned.</p>}
-      {c.truth && ruling && (
-        <p className="truth">
-          Scenario ground truth (hidden from the agents): {PARTY_NAME[topParty(c.truth)]}.{' '}
-          {topParty(c.truth) === topParty(ruling.split) ? 'The ruling agrees.' : 'The ruling disagrees.'}
-        </p>
-      )}
       {c.closedAt && (
         <button className="export" onClick={() => downloadPack(c)}>
           Download the evidence pack
@@ -391,10 +383,10 @@ export function Investigators({ c }: { c: CaseFile }) {
 }
 
 // The corridor reads differently from each side.
-const LENSES: { id: Lens; name: string; text: string }[] = [
-  { id: 'flow', name: 'Side', text: "Height is money: the ceiling is the owner's limit. The line is the agent's recorded journey, left to right." },
-  { id: 'agents', name: 'Front', text: 'Looking down the corridor. The frame is everything the owner allowed; anything outside it is outside the mandate.' },
-  { id: 'liability', name: 'Top', text: "Width is scope: the walls are the owner's own agent session. A line that crosses a wall was not the owner's agent." },
+const LENSES: { id: Lens; name: string }[] = [
+  { id: 'flow', name: 'Side' },
+  { id: 'agents', name: 'Front' },
+  { id: 'liability', name: 'Top' },
 ];
 
 export function ReplayLens() {
@@ -408,9 +400,7 @@ export function ReplayLens() {
             {l.name}
           </button>
         ))}
-        <span>or drag to rotate, scroll to zoom</span>
       </div>
-      <p>{LENSES.find((l) => l.id === lens)!.text}</p>
     </div>
   );
 }

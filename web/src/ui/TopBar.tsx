@@ -74,21 +74,17 @@ export function TopBar() {
         </svg>
         <span>Blackbox</span>
       </button>
-      <nav className="crumbs">
-        {inCase ? (
-          <>
-            <button onClick={back}>Live</button>
-            <i>/</i>
-            <span className="mono">{inCase}</span>
-          </>
-        ) : (
-          <span>The guarantee for purchases made by AI agents</span>
-        )}
-      </nav>
+      {inCase && (
+        <nav className="crumbs">
+          <button onClick={back}>Live</button>
+          <i>/</i>
+          <span className="mono">{inCase}</span>
+        </nav>
+      )}
       <div className="metrics">
-        <Metric label="Guaranteed" value={stats ? <Money value={stats.gmv} /> : '—'} note={stats ? `${stats.purchases.toLocaleString('en-GB')} purchases` : undefined} />
-        <Metric label="Held in the box" value={String(heldNow)} note="right now" />
-        <Metric label="Stopped before settlement" value={stats ? <Money value={stats.prevented} /> : '—'} note={stats ? `${stats.blocked} blocked` : undefined} />
+        <Metric label="Guaranteed" value={stats ? <Money value={stats.gmv} /> : '—'} />
+        <Metric label="Held in the box" value={String(heldNow)} />
+        <Metric label="Stopped before settlement" value={stats ? <Money value={stats.prevented} /> : '—'} />
       </div>
       <div className="controls">
         {waiting.length > 0 && (

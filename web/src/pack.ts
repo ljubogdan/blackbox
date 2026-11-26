@@ -23,14 +23,14 @@ const STATUS: Record<CaseFile['status'], string> = {
 const CSS = `
 @page{margin:18mm}
 *{box-sizing:border-box}
-body{font:14px/1.55 "Hanken Grotesk","Helvetica Neue",Arial,sans-serif;color:#16161a;background:#f3f2ee;margin:0;font-variant-numeric:tabular-nums}
+body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Helvetica Neue",Arial,sans-serif;color:#16161a;background:#f3f2ee;margin:0;font-variant-numeric:tabular-nums}
 main{max-width:840px;margin:36px auto;padding:56px 64px 48px;background:#fff;border:1px solid #dddcd6}
 header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding-bottom:22px;border-bottom:2px solid #16161a}
 .brand{font-weight:650;letter-spacing:-.02em;font-size:15px}
 .kind{font-size:12px;color:#6a6a70;text-align:right;line-height:1.5}
-h1{font:400 34px/1.1 "Newsreader","Iowan Old Style",Georgia,serif;letter-spacing:-.02em;margin:28px 0 6px}
+h1{font:600 34px/1.1 -apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Helvetica Neue",Arial,sans-serif;letter-spacing:-.03em;margin:28px 0 6px}
 .sub{color:#6a6a70;font-size:13px}
-h2{font:400 22px/1.2 "Newsreader","Iowan Old Style",Georgia,serif;letter-spacing:-.01em;margin:38px 0 12px;padding-top:16px;border-top:1px solid #dddcd6}
+h2{font:600 20px/1.2 -apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Helvetica Neue",Arial,sans-serif;letter-spacing:-.022em;margin:38px 0 12px;padding-top:16px;border-top:1px solid #dddcd6}
 h3{font-size:13.5px;font-weight:650;margin:20px 0 4px}
 h3 span{font-weight:400;color:#6a6a70}
 p{margin:6px 0}
@@ -38,10 +38,10 @@ p{margin:6px 0}
 dl{display:grid;grid-template-columns:170px 1fr;gap:0;margin:0}
 dt,dd{margin:0;padding:7px 0;border-bottom:1px solid #ecebe6}
 dt{color:#6a6a70;font-size:12.5px}
-.quote{font:italic 16px/1.4 "Newsreader","Iowan Old Style",Georgia,serif}
+.quote{font-size:15px}
 .outcome{display:flex;align-items:baseline;gap:12px;margin:0 0 12px}
 .outcome b{font-size:16px}
-.rationale{font:17px/1.45 "Newsreader","Iowan Old Style",Georgia,serif;margin:14px 0}
+.rationale{font-size:15.5px;line-height:1.5;margin:14px 0}
 .split{display:flex;height:38px;border-radius:5px;overflow:hidden;gap:2px;margin:10px 0 6px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .split div{display:flex;flex-direction:column;justify-content:center;padding:0 10px;min-width:0;color:#111;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden}
 .split b{font-size:15px;line-height:1.1}
@@ -50,7 +50,7 @@ th,td{padding:6px 10px 6px 0;text-align:left;vertical-align:top;border-bottom:1p
 th{font-weight:600;font-size:11.5px;color:#6a6a70;border-bottom:1px solid #16161a}
 td.num,th.num{text-align:right;padding-right:0;white-space:nowrap}
 tr.rec th{width:34%;border-bottom:1px solid #ecebe6;font-weight:400}
-code{font:11.5px "IBM Plex Mono",ui-monospace,Menlo,monospace;color:#33333a;word-break:break-all}
+code{font:11.5px ui-monospace,"SF Mono",Menlo,"IBM Plex Mono",monospace;color:#33333a;word-break:break-all}
 .muted{color:#6a6a70}.ok{color:#0c7a50}.bad{color:#c2331f}
 .seal{font-size:12.5px;color:#4a4a50}
 footer{margin-top:40px;padding-top:14px;border-top:1px solid #dddcd6;font-size:11.5px;color:#6a6a70;display:flex;justify-content:space-between;gap:20px}

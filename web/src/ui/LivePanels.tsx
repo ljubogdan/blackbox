@@ -6,9 +6,9 @@ import { CaseState } from './State';
 
 // The box reads differently from each side.
 const LENSES: { id: Lens; name: string; text: string }[] = [
-  { id: 'flow', name: 'Side', text: 'The path of a payment. Left to right: before settlement, inside the box, settled. Height is the order value.' },
-  { id: 'agents', name: 'Front', text: 'One column for each agent provider, with the order value going up. Every dot is a decided case.' },
-  { id: 'liability', name: 'Top', text: 'Agent providers down the side, the party held liable across. A crowded cell is an agent whose purchases keep going wrong the same way.' },
+  { id: 'flow', name: 'Side', text: 'The path of a payment, left to right. Height is the order value.' },
+  { id: 'agents', name: 'Front', text: 'Each column is an agent provider. Each dot, a decided case.' },
+  { id: 'liability', name: 'Top', text: 'Agent providers against who was held liable.' },
 ];
 
 function CaseRow({ c }: { c: CaseFile }) {
@@ -76,10 +76,7 @@ export function LivePanels() {
     <>
       <section className="intro">
         <h1>When an AI agent buys the wrong thing, who pays?</h1>
-        <p>
-          Every purchase a shopping agent makes passes through this box and is recorded. A risky one is held before the money moves. A
-          disputed one is investigated, and the loss goes to whoever caused it.
-        </p>
+        <p>Every purchase an AI agent makes passes through the box.</p>
       </section>
       <div className="lens">
         <div className="seg" role="tablist" aria-label="Which side of the box to look at">
@@ -88,27 +85,8 @@ export function LivePanels() {
               {l.name}
             </button>
           ))}
-          <span>or drag the box</span>
         </div>
         <p>{LENSES.find((l) => l.id === lens)!.text}</p>
-        <div className="key">
-          <span>
-            <i className="line" />
-            Purchase
-          </span>
-          <span>
-            <i className="diamond" />
-            Held
-          </span>
-          <span>
-            <i className="ring" />
-            Disputed
-          </span>
-          <span>
-            <i className="dot" />
-            Decided, in the colour of who was liable
-          </span>
-        </div>
       </div>
 
       <aside className="cases">
