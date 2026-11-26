@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { play } from './sound';
-import type { CaseFile, ClientMsg, EngineInfo, Lane, Party, PurchaseLite, Role, ServerMsg, Stats } from '../../shared/types';
+import type { CaseFile, ClientMsg, EngineInfo, Lane, Party, PurchaseLite, Role, ServerMsg, Signature, Stats } from '../../shared/types';
 
 export const PARTY_COLOR: Record<Party, string> = {
   customer: '#a593ff',
@@ -35,12 +35,12 @@ interface Store {
   arcs: Arc[];
   lanes: Lane[];
   skew: number; // server clock minus browser clock, ms
-  view: 'live' | 'case';
+  view: 'network' | 'live' | 'case';
   selected: string | null;
   inspect: { evidenceId: string; field?: string } | null;
   paused: boolean;
   sound: boolean;
-  builder: boolean; // the "break it yourself" dialog
+  builder: boolean; // the simulator dialog
   engine: boolean; // the engine drawer at the bottom
   lens: Lens; // which way the live view is being looked at
   lensGo: { to: Lens; n: number } | null; // a request to turn the box to a side
@@ -48,6 +48,16 @@ interface Store {
   replayLens: Lens; // the same, for the replay of one case
   replayGo: { to: Lens; n: number } | null;
   entering: { caseId: string; at: number } | null; // the camera is diving into the box towards this case
+  // Three levels: the network of every merchant's box, one merchant's box, one case.
+  merchant: string | null; // the box being looked at in the 'live' view
+  lastMerchant: string | null; // the box just left, so the network view can pull out of it
+  boxing: { merchant: string; at: number } | null; // the camera is flying from the network into this box
+  from: 'network' | 'live'; // where a case was opened from
+  signatures: Record<string, Signature>;
+  waves: { merchant: string; label: string; at: number }[]; // signatures learned while this page was open
+  catches: { caseId: string; merchant: string; source: string; total: number; at: number }[]; // payments the network stopped
+  enterBox: (merchant: string) => void;
+  toNetwork: () => void;
   limitPreview: number | null; // the limit being tried on the what-if slider
   pageMode: 'human' | 'agent';
   awaiting: string | null; // nonce of a case we asked for and want to open when it exists
@@ -71,7 +81,7 @@ export const useStore = create<Store>((set, get) => ({
   arcs: [],
   lanes: [],
   skew: 0,
-  view: 'live',
+  view: 'network',
   selected: null,
   inspect: null,
   paused: false,
@@ -84,6 +94,13 @@ export const useStore = create<Store>((set, get) => ({
   replayLens: 'flow',
   replayGo: null,
   entering: null,
+  merchant: null,
+  lastMerchant: null,
+  boxing: null,
+  from: 'network',
+  signatures: {},
+  waves: [],
+  catches: [],
   limitPreview: null,
   pageMode: 'human',
   awaiting: null,
@@ -94,14 +111,27 @@ export const useStore = create<Store>((set, get) => ({
   },
   set: (patch) => set(patch),
   open: (caseId) => {
-    const arrive = () => set({ view: 'case', selected: caseId, inspect: null, limitPreview: null, pageMode: 'human', replayLens: 'flow', replayGo: null, entering: null, hover: null });
-    // From the live view, the camera dives into the box first; the replay is what is inside it.
-    if (get().view !== 'live') return arrive();
+    const view = get().view;
+    const from = view === 'case' ? get().from : view;
+    const arrive = () => set({ view: 'case', from, selected: caseId, inspect: null, limitPreview: null, pageMode: 'human', replayLens: 'flow', replayGo: null, entering: null, boxing: null, hover: null });
+    // From a merchant's box, the camera dives into it first; the replay is what is inside it.
+    if (view !== 'live') return arrive();
     if (get().entering) return;
     set({ entering: { caseId, at: performance.now() } });
     setTimeout(arrive, DIVE_MS);
   },
-  back: () => set({ view: 'live', inspect: null, limitPreview: null, entering: null }),
+  // One level up: case to wherever it was opened from, box to the network.
+  back: () => {
+    const { view, from, merchant } = get();
+    if (view === 'case' && from === 'live' && merchant) return set({ view: 'live', inspect: null, limitPreview: null, entering: null });
+    get().toNetwork();
+  },
+  enterBox: (merchant) => {
+    if (get().boxing) return;
+    set({ boxing: { merchant, at: performance.now() }, hover: null });
+    setTimeout(() => set({ view: 'live', merchant, boxing: null, lensGo: { to: 'flow', n: Date.now() } }), DIVE_MS);
+  },
+  toNetwork: () => set((s) => ({ view: 'network', lastMerchant: s.merchant, merchant: null, inspect: null, limitPreview: null, entering: null, boxing: null, hover: null })),
   setInspect: (inspect) => set({ inspect }),
   send: (msg) => socket?.readyState === WebSocket.OPEN && socket.send(JSON.stringify(msg)),
   setPaused: (paused) => {
@@ -132,6 +162,7 @@ function apply(msg: ServerMsg) {
         stats: msg.stats,
         cases: Object.fromEntries(msg.cases.map((c) => [c.id, c])),
         lanes: msg.lanes,
+        signatures: Object.fromEntries(msg.signatures.map((x) => [x.id, x])),
         skew: msg.now - Date.now(),
         // Replay only the open disputes; old clean purchases have already landed.
         arcs: msg.purchases.filter((p) => p.caseId).map((p) => ({ ...p, seenAt: performance.now() - 4000 })),
@@ -142,6 +173,14 @@ function apply(msg: ServerMsg) {
       break;
     case 'case':
       cue(s.cases[msg.case.id], msg.case);
+      // The network stopped a payment: remember it so the network view can show where, and from where.
+      if (msg.case.network && msg.case.closedAt && !s.cases[msg.case.id]?.closedAt)
+        useStore.setState({
+          catches: [
+            ...s.catches.slice(-20),
+            { caseId: msg.case.id, merchant: msg.case.purchase.merchant.name, source: msg.case.network.sourceMerchant, total: msg.case.purchase.total, at: performance.now() },
+          ],
+        });
       useStore.setState({ cases: { ...s.cases, [msg.case.id]: msg.case } });
       break;
     case 'created':
@@ -153,6 +192,12 @@ function apply(msg: ServerMsg) {
       break;
     case 'stats':
       useStore.setState({ stats: msg.stats });
+      break;
+    case 'signature':
+      useStore.setState({
+        signatures: { ...s.signatures, [msg.signature.id]: msg.signature },
+        waves: msg.fresh ? [...s.waves.slice(-10), { merchant: msg.signature.merchant, label: msg.signature.label, at: performance.now() }] : s.waves,
+      });
       break;
     case 'lane': {
       const i = s.lanes.findIndex((l) => l.loopId === msg.lane.loopId);

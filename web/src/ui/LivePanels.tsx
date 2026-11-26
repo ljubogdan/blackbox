@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { BoardRow, CaseFile } from '../../../shared/types';
+import type { BoardRow, CaseFile, Signature } from '../../../shared/types';
 import { PARTIES, PARTY_NAME } from '../../../shared/types';
 import { caseList, eur, PARTY_COLOR, useStore, type Lens } from '../store';
 import { CaseState } from './State';
@@ -64,17 +64,50 @@ function Board({ title, rows, base }: { title: string; rows: BoardRow[]; base: n
   );
 }
 
+// What the network has learned, and what each lesson has stopped since.
+function Learned() {
+  const signatures = useStore((s) => s.signatures);
+  const open = useStore((s) => s.open);
+  const list = Object.values(signatures).sort((a: Signature, b: Signature) => b.prevented - a.prevented || b.at - a.at);
+  return (
+    <div className="scroll pad">
+      <p className="board-note">
+        When a ruling confirms an attack, the network keeps its signature and every merchant's Blackbox recognises it from then on. The
+        next time it lands anywhere, it is stopped on arrival.
+      </p>
+      {list.length === 0 && <div className="empty">Nothing learned yet.</div>}
+      {list.map((sig) => (
+        <div key={sig.id} className="sig">
+          <div className="top">
+            <span className="mono">{sig.value}</span>
+            <b>{sig.prevented > 0 ? eur(sig.prevented, 0) : '—'}</b>
+          </div>
+          <div className="sub">
+            <span>{sig.kind === 'widget' ? 'Hidden text in a third-party widget' : 'Stolen agent token, replayed'}</span>
+            <span>{sig.catches === 1 ? '1 stop' : `${sig.catches} stops`}</span>
+          </div>
+          <button className="from" onClick={() => open(sig.learnedFrom)}>
+            Learned from <span className="mono">{sig.learnedFrom}</span> at {sig.merchant}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function LivePanels() {
   const cases = useStore((s) => s.cases);
   const stats = useStore((s) => s.stats);
-  const list = caseList(cases);
-  const [tab, setTab] = useState<'cases' | 'board'>('cases');
+  const view = useStore((s) => s.view);
+  const merchant = useStore((s) => (s.view === 'live' ? s.merchant : null));
+  const list = caseList(cases).filter((c) => !merchant || c.purchase.merchant.name === merchant);
+  const [tab, setTab] = useState<'cases' | 'network' | 'board'>('cases');
   const lens = useStore((s) => s.lens);
   const set = useStore((s) => s.set);
 
   return (
     <>
-      <div className="lens">
+      {view === 'live' && <div className="lens">
         <div className="seg" role="tablist" aria-label="Which side of the box to look at">
           {LENSES.map((l) => (
             <button key={l.id} role="tab" aria-selected={lens === l.id} className={lens === l.id ? 'on' : ''} onClick={() => set({ lensGo: { to: l.id, n: Date.now() } })}>
@@ -83,13 +116,16 @@ export function LivePanels() {
           ))}
         </div>
         <p>{LENSES.find((l) => l.id === lens)!.text}</p>
-      </div>
+      </div>}
 
       <aside className="cases">
         <header>
           <div className="tabs">
             <button className={tab === 'cases' ? 'on' : ''} onClick={() => setTab('cases')}>
               Cases
+            </button>
+            <button className={tab === 'network' ? 'on' : ''} onClick={() => setTab('network')}>
+              Network
             </button>
             <button className={tab === 'board' ? 'on' : ''} onClick={() => setTab('board')}>
               Risk pricing
@@ -103,6 +139,8 @@ export function LivePanels() {
               <CaseRow key={c.id} c={c} />
             ))}
           </div>
+        ) : tab === 'network' ? (
+          <Learned />
         ) : (
           <div className="scroll pad">
             <p className="board-note">

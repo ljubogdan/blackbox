@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { ModelContext, RuntimeState } from '@mozaik-ai/core';
-import type { BoardRow, CaseFile, EvidenceRecord, Lane, Party, PurchaseLite, ServerMsg, Stats } from '../shared/types';
+import type { BoardRow, CaseFile, EvidenceRecord, Lane, Party, PurchaseLite, ServerMsg, Signature, Stats } from '../shared/types';
 import { config } from './config';
 
 export interface Deferred {
@@ -30,6 +30,9 @@ export class BlackboxState extends RuntimeState {
   merchants = new Map<string, BoardRow>();
   approvals = new Map<string, (approved: boolean) => void>(); // case id -> waiting interception
 
+  // Attacks the network has learned, by signature id.
+  signatures = new Map<string, Signature>();
+
   activeLanes = new Map<string, Lane>();
   lanes: Lane[] = [];
 
@@ -55,6 +58,9 @@ export class BlackboxState extends RuntimeState {
     prevented: 0,
     challenges: 0,
     revised: 0,
+    networkCaught: 0,
+    networkPrevented: 0,
+    signatures: 0,
     board: { providers: [], merchants: [] },
   };
 }

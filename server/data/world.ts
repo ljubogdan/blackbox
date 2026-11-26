@@ -1,5 +1,5 @@
 import type { GeoPoint } from '../../shared/types';
-import { PROVIDER_NAMES } from '../../shared/types';
+import { MERCHANTS as MERCHANT_LIST, PROVIDER_NAMES } from '../../shared/types';
 
 // Everything here is synthetic. Merchant and agent-provider names are invented.
 
@@ -45,20 +45,7 @@ export const CITIES: GeoPoint[] = [
   { city: 'Vancouver', country: 'CA', lat: 49.28, lon: -123.12 },
 ];
 
-export const MERCHANTS: (GeoPoint & { name: string })[] = [
-  { name: 'Northwind Outfitters', city: 'Seattle', country: 'US', lat: 47.61, lon: -122.33 },
-  { name: 'Lumen Electronics', city: 'Shanghai', country: 'CN', lat: 31.23, lon: 121.47 },
-  { name: 'Halden Home', city: 'Stockholm', country: 'SE', lat: 59.33, lon: 18.07 },
-  { name: 'Pikto Tech', city: 'Berlin', country: 'DE', lat: 52.52, lon: 13.4 },
-  { name: 'Sava Sport', city: 'Belgrade', country: 'RS', lat: 44.79, lon: 20.45 },
-  { name: 'Maison Clary', city: 'Paris', country: 'FR', lat: 48.86, lon: 2.35 },
-  { name: 'Kumo Audio', city: 'Tokyo', country: 'JP', lat: 35.68, lon: 139.69 },
-  { name: 'Brightcart', city: 'London', country: 'GB', lat: 51.51, lon: -0.13 },
-  { name: 'Terra Verde Market', city: 'São Paulo', country: 'BR', lat: -23.55, lon: -46.63 },
-  { name: 'Orchard Lane', city: 'New York', country: 'US', lat: 40.71, lon: -74.01 },
-  { name: 'Meridian Supply', city: 'Singapore', country: 'SG', lat: 1.35, lon: 103.82 },
-  { name: 'Coastline Goods', city: 'Sydney', country: 'AU', lat: -33.87, lon: 151.21 },
-];
+export const MERCHANTS = MERCHANT_LIST;
 
 export const PROVIDERS = PROVIDER_NAMES;
 
@@ -87,3 +74,16 @@ export const CATALOG: CatalogItem[] = [
 
 export const DEVICES = ['iPhone-7Q2K', 'Pixel-M41X', 'MacBook-A9F3', 'Galaxy-T88R', 'ThinkPad-L2C6', 'iPad-H5D1'];
 export const FOREIGN_DEVICES = ['headless-linux-5e1c', 'vm-chrome-91af', 'emulator-android-0c7d'];
+
+// Third-party widgets that shops embed. An attacker who plants hidden text in one
+// reaches every shop that uses it, which is why one catch protects the others.
+export const WIDGET_DOMAINS = [
+  'reviewly-cdn.example',
+  'starpulse-widgets.example',
+  'trustmark-badges.example',
+  'ratebox.example',
+  'shopvoice-embed.example',
+  'peerstars.example',
+  'quickrate.example',
+  'verified-buyers.example',
+];

@@ -50,11 +50,13 @@ function Metric({ label, value, note }: { label: string; value: React.ReactNode;
 
 export function TopBar() {
   const stats = useStore((s) => s.stats);
-  const heldNow = useStore((s) => Object.values(s.cases).filter((c) => c.stage === 'hold' && !c.closedAt).length);
   const inCase = useStore((s) => (s.view === 'case' ? s.selected : null));
   const paused = useStore((s) => s.paused);
   const setPaused = useStore((s) => s.setPaused);
   const back = useStore((s) => s.back);
+  const toNetwork = useStore((s) => s.toNetwork);
+  const view = useStore((s) => s.view);
+  const boxName = useStore((s) => (s.view === 'live' || (s.view === 'case' && s.from === 'live') ? s.merchant : null));
   const sound = useStore((s) => s.sound);
   const set = useStore((s) => s.set);
   const cases = useStore((s) => s.cases);
@@ -64,7 +66,7 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <button className="brand" onClick={back} title="Back to the live view">
+      <button className="brand" onClick={toNetwork} title="The network">
         <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden>
           <rect x="1.5" y="1.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
           <path d="M10 1.5v17" stroke="currentColor" strokeWidth="1.5" />
@@ -72,17 +74,27 @@ export function TopBar() {
         </svg>
         <span>Blackbox</span>
       </button>
-      {inCase && (
+      {view !== 'network' && (
         <nav className="crumbs">
-          <button onClick={back}>Live</button>
-          <i>/</i>
-          <span className="mono">{inCase}</span>
+          <button onClick={toNetwork}>Network</button>
+          {boxName && (
+            <>
+              <i>/</i>
+              {inCase ? <button onClick={back}>{boxName}</button> : <span>{boxName}</span>}
+            </>
+          )}
+          {inCase && (
+            <>
+              <i>/</i>
+              <span className="mono">{inCase}</span>
+            </>
+          )}
         </nav>
       )}
       <div className="metrics">
         <Metric label="Guaranteed" value={stats ? <Money value={stats.gmv} /> : '—'} />
-        <Metric label="Held in the box" value={String(heldNow)} />
         <Metric label="Stopped before settlement" value={stats ? <Money value={stats.prevented} /> : '—'} />
+        <Metric label="Stopped by the network" value={stats ? <Money value={stats.networkPrevented} /> : '—'} />
       </div>
       <div className="controls">
         {waiting.length > 0 && (

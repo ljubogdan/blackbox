@@ -19,6 +19,7 @@ import { join, note, publish, pushCase, runLoop, state } from '../runtime';
 import { keyOf, push, splitKey } from '../state';
 import { chainIntegrity } from '../data/scenarios';
 import { ARBITER_INSTRUCTION, arbiterBrief, caseBrief, challengeBrief, investigatorInstruction } from './prompts';
+import { learnable, marksIn } from './network';
 import { screen } from './sentinel';
 import { issueRulingTool, readEvidenceTool, respondToChallengeTool, submitFindingTool } from './tools';
 import { checkCitations } from './verify';
@@ -34,6 +35,7 @@ import { checkCitations } from './verify';
 //   Arbiter (model)          wakes on case.ready, once the findings are verified and any challenge is answered
 //   Risk officer (human)     approves or rejects rulings on large orders (interception)
 //   Ledger (code)            wakes on ruling.issued, computes the money from the order record
+//   Network (code)           wakes on case.closed, learns attack signatures from rulings and shares them with every merchant
 //   Bridge (code)            observes everything and streams it to the browser
 
 const when = (pred: (ctx: SituationContext) => boolean): SituationSpecification =>
@@ -410,6 +412,29 @@ function createSentinel(): Agent {
         const me = ctx.participant.getId();
         const c = s.cases.get(payloadOf<{ caseId: string }>(ctx).caseId);
         if (!c) return;
+        // An attack the network already learned at another merchant needs no investigation.
+        const known = marksIn(c)
+          .map((m) => s.signatures.get(m.id))
+          .find((sig) => !!sig);
+        if (known) {
+          c.network = { signature: known.id, label: known.label, sourceCaseId: known.learnedFrom, sourceMerchant: known.merchant };
+          c.flag = `matches a known attack: ${known.label}`;
+          for (const r of ROLES) c.investigators[r].status = 'skipped';
+          c.status = 'arbitrating';
+          c.arbiter = {
+            status: 'done',
+            ruling: {
+              split: known.kind === 'widget' ? { customer: 0, agent_provider: 100, merchant: 0, fraud: 0 } : { customer: 0, agent_provider: 0, merchant: 0, fraud: 100 },
+              reason_code: 'KNOWN_ATTACK',
+              rationale: `Blocked on arrival: ${known.label}. The network learned this attack from ${known.learnedFrom} at ${known.merchant}, so no investigation was needed.`,
+            },
+          };
+          s.stats.held++;
+          note(c, 'Sentinel', `blocked on arrival: matches ${known.id}, learned from ${known.learnedFrom} at ${known.merchant}`);
+          pushCase(c);
+          publish('ruling.issued', me, { caseId: c.id });
+          return;
+        }
         const reason = screen(c);
         if (!reason) {
           // Nothing to look at: the payment goes through untouched.
@@ -526,6 +551,10 @@ function createLedger(): Agent {
           if (block) {
             s.stats.blocked++;
             s.stats.prevented = round2(s.stats.prevented + total);
+            if (c.network) {
+              s.stats.networkCaught++;
+              s.stats.networkPrevented = round2(s.stats.networkPrevented + total);
+            }
           } else {
             s.stats.released++;
             book(c.purchase);
@@ -569,6 +598,44 @@ function createLedger(): Agent {
     },
   };
   return codeParticipant('Ledger', [onPurchase, onRuling]);
+}
+
+// ───────────────────────── network (code) ─────────────────────────
+
+// Learns from rulings and shares what it learned. Every merchant runs its own
+// Blackbox; this participant is what makes them one network.
+function createNetwork(): Agent {
+  const onClosed: SituationHandler = {
+    specification: when(({ event }) => event.type === 'case.closed'),
+    processor: {
+      apply(ctx) {
+        const s = state();
+        const me = ctx.participant.getId();
+        const c = s.cases.get(payloadOf<{ caseId: string }>(ctx).caseId);
+        const ruling = c?.arbiter.ruling;
+        if (!c || !ruling) return;
+        if (c.network) {
+          // A catch: credit the signature that made it.
+          const sig = s.signatures.get(c.network.signature);
+          if (!sig) return;
+          sig.catches++;
+          sig.prevented = round2(sig.prevented + c.purchase.total);
+          note(c, 'Network', `credited ${sig.id} with this catch`);
+          publish('signature.updated', me, { id: sig.id });
+          return;
+        }
+        if (c.status !== 'ruled' && c.status !== 'blocked') return;
+        const mark = learnable(c, ruling);
+        if (!mark || s.signatures.has(mark.id)) return;
+        s.signatures.set(mark.id, { ...mark, learnedFrom: c.id, merchant: c.purchase.merchant.name, at: Date.now(), catches: 0, prevented: 0 });
+        s.stats.signatures = s.signatures.size;
+        note(c, 'Network', `learned ${mark.id} from this ruling and shared it with every merchant`);
+        pushCase(c);
+        publish('signature.learned', me, { id: mark.id });
+      },
+    },
+  };
+  return codeParticipant('Network', [onClosed]);
 }
 
 // ───────────────────────── bridge (observer) ─────────────────────────
@@ -623,6 +690,13 @@ function createBridge(): Agent {
           case 'purchase.pending':
             push({ type: 'purchase', purchase: p.purchase });
             break;
+          case 'signature.learned':
+          case 'signature.updated': {
+            const signature = s.signatures.get(p.id);
+            if (signature) push({ type: 'signature', signature: { ...signature }, fresh: event.type === 'signature.learned' });
+            pushStats(true);
+            break;
+          }
           case 'purchase.held':
           case 'dispute.opened': {
             const c = s.cases.get(p.caseId);
@@ -671,10 +745,11 @@ export function assembleTeam(): Team {
   const moderator = createModerator();
   const arbiter = createArbiter();
   const ledger = createLedger();
+  const network = createNetwork();
   const officer = createHuman({ name: 'Risk officer', capabilities: ['approves-rulings'], handlers: [] });
 
   // The bridge joins first so it has mapped a loop to its case before anyone else needs it.
-  for (const p of [bridge, intake, sentinel, ...investigators, verifier, moderator, arbiter, ledger, officer]) join(p);
+  for (const p of [bridge, intake, sentinel, ...investigators, verifier, moderator, arbiter, ledger, network, officer]) join(p);
 
   return {
     intake,
@@ -688,6 +763,7 @@ export function assembleTeam(): Team {
       { name: 'Arbiter', kind: 'llm' },
       { name: 'Risk officer', kind: 'human' },
       { name: 'Ledger', kind: 'code' },
+      { name: 'Network', kind: 'code' },
       { name: 'Bridge', kind: 'code' },
     ],
   };

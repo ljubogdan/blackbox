@@ -9,7 +9,7 @@ import { SCENARIOS } from '../shared/types';
 import { assembleTeam } from './agents/team';
 import { config } from './config';
 import { buildCase, buildPurchase, cloneWithLimit, type BuildOptions } from './data/scenarios';
-import { CATALOG } from './data/world';
+import { CATALOG, MERCHANTS, WIDGET_DOMAINS } from './data/world';
 import { GuardedRunner } from './model/guard';
 import { ScriptedRunner } from './model/scripted';
 import { Rng } from './rng';
@@ -131,6 +131,49 @@ const SMALL_ITEMS = CATALOG.map((c, i) => ({ i, price: c.price }))
   .filter((c) => c.price * 4.4 < config.approvalThreshold)
   .map((c) => c.i);
 
+// ───────────────────────── attack campaigns ─────────────────────────
+// Real attacks are not one-offs: the same widget is embedded in many shops, the
+// same stolen-token farm spends at many merchants. A campaign keeps its source
+// and lands at a different merchant each time, so once a ruling teaches the
+// network its signature, the next landing is caught on arrival.
+
+interface Campaign {
+  kind: 'injection' | 'hijack';
+  source: string;
+  hit: Set<string>; // merchants it has already landed at
+}
+const campaigns: Campaign[] = [];
+
+const newSource = (kind: Campaign['kind']) =>
+  kind === 'injection'
+    ? rng.pick(WIDGET_DOMAINS.filter((d) => !campaigns.some((c) => c.source === d))) ?? `widget-${rng.int(100, 999)}.example`
+    : `${rng.pick(['vm-chrome', 'headless-linux', 'emulator-android'])}-${rng.int(0x1000, 0xffff).toString(16)}`;
+
+const signatureOf = (c: Campaign) => `${c.kind === 'injection' ? 'widget' : 'device'}:${c.source}`;
+const unhit = (c: Campaign) => MERCHANTS.filter((m) => !c.hit.has(m.name));
+
+// Where the next attack of this kind comes from: usually a campaign still being learned, sometimes a new one.
+function campaignFor(kind: Campaign['kind']): Campaign {
+  const open = campaigns.filter((c) => c.kind === kind && unhit(c).length > 0 && !state().signatures.has(signatureOf(c)));
+  if (open.length && rng.next() < 0.5) return rng.pick(open);
+  const c: Campaign = { kind, source: newSource(kind), hit: new Set() };
+  campaigns.push(c);
+  return c;
+}
+
+function land(c: Campaign, opts: BuildOptions) {
+  const target = rng.pick(unhit(c));
+  c.hit.add(target.name);
+  return openCase(c.kind, { ...opts, merchant: target.name, source: c.source });
+}
+
+// A learned campaign keeps trying other merchants. These are the payments the network stops.
+function networkTick() {
+  if (paused) return;
+  const learned = campaigns.filter((c) => state().signatures.has(signatureOf(c)) && unhit(c).length > 0);
+  if (learned.length) land(rng.pick(learned), { stage: 'hold' });
+}
+
 function disputeTick() {
   if (paused) return;
   const open = [...state().cases.values()].filter((c) => c.status === 'investigating' || c.status === 'arbitrating').length;
@@ -140,7 +183,8 @@ function disputeTick() {
   // new disputes to small orders, which the arbiter may rule on alone.
   const waiting = [...state().cases.values()].filter((c) => c.status === 'awaiting_approval').length;
   const item = next.stage === 'dispute' && waiting >= config.maxAwaiting ? rng.pick(SMALL_ITEMS) : undefined;
-  openCase(next.sabotage, { stage: next.stage, item });
+  if (next.sabotage === 'injection' || next.sabotage === 'hijack') land(campaignFor(next.sabotage), { stage: next.stage, item });
+  else openCase(next.sabotage, { stage: next.stage, item });
 }
 
 // ───────────────────────── http + websocket ─────────────────────────
@@ -186,6 +230,7 @@ wss.on('connection', (ws) => {
     cases: [...s.cases.values()],
     purchases: s.purchases,
     lanes: s.lanes.slice(-200),
+    signatures: [...s.signatures.values()],
     now: Date.now(),
   });
   ws.on('message', (raw) => {
@@ -220,4 +265,5 @@ server.listen(config.port, () => {
   tickPurchase();
   setTimeout(() => openCase('injection', { stage: 'hold' }), 1800);
   setInterval(disputeTick, config.disputeEveryMs);
+  setInterval(networkTick, config.disputeEveryMs * 2.2);
 });

@@ -48,7 +48,7 @@ const OK = new THREE.Color(MINT);
 const STOP = new THREE.Color(BREACH);
 const GREY = new THREE.Color('#77777d');
 
-const plainVertex = /* glsl */ `
+export const plainVertex = /* glsl */ `
   varying vec2 vUv;
   void main() {
     vUv = uv;
@@ -69,7 +69,7 @@ const threadShader = {
     }`,
 };
 
-const glassShader = {
+export const glassShader = {
   vertexShader: plainVertex,
   fragmentShader: /* glsl */ `
     varying vec2 vUv;
@@ -81,7 +81,7 @@ const glassShader = {
     }`,
 };
 
-const footprintShader = {
+export const footprintShader = {
   vertexShader: plainVertex,
   fragmentShader: /* glsl */ `
     varying vec2 vUv;
@@ -134,7 +134,7 @@ interface Stamp {
 }
 
 // A case that ends with someone liable is filed in the box. A released hold is not: nothing was wrong with it.
-const isFiled = (c: CaseFile) => !!c.closedAt && !!c.arbiter.ruling && (c.status === 'ruled' || c.status === 'blocked');
+export const isFiled = (c: CaseFile) => !!c.closedAt && !!c.arbiter.ruling && (c.status === 'ruled' || c.status === 'blocked');
 
 function outcomeColor(c: CaseFile): THREE.Color {
   if (c.status === 'released') return OK;
@@ -240,9 +240,10 @@ function Threads() {
 
   useFrame(() => {
     const now = performance.now();
-    const { arcs, cases, hover } = useStore.getState();
+    const { arcs, cases, hover, merchant } = useStore.getState();
 
     for (const a of arcs) {
+      if (merchant && a.merchant.name !== merchant) continue;
       if (live.current.has(a.id) || now - a.seenAt > 9000) continue;
       // A case that closed before this page opened is already filed in the box.
       if (a.caseId && cases[a.caseId]?.closedAt && now - a.seenAt > 3000) continue;
@@ -369,7 +370,7 @@ function Threads() {
   return <group ref={group} />;
 }
 
-const hash = (s: string) => {
+export const hash = (s: string) => {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return (h >>> 0) / 4294967295;
@@ -384,7 +385,9 @@ const placeOf = (c: CaseFile) =>
     laneZ(c.purchase.provider) + (hash(c.id + 'z') - 0.5) * GAP * 0.6,
   );
 
-const filedCases = (cases: Record<string, CaseFile>) => caseList(cases).filter(isFiled).slice(0, 80);
+// The box belongs to one merchant: only its own cases are in it.
+const mine = (merchant: string | null) => (c: CaseFile) => !merchant || c.purchase.merchant.name === merchant;
+const filedCases = (cases: Record<string, CaseFile>, merchant: string | null) => caseList(cases).filter(mine(merchant)).filter(isFiled).slice(0, 80);
 
 // One decided case, filed in the box: in the bay of the party held liable, at
 // the height of its order value, in the lane of the agent provider that bought it.
@@ -443,7 +446,8 @@ function Filed({ c }: { c: CaseFile }) {
 
 function FiledCases() {
   const cases = useStore((s) => s.cases);
-  const list = useMemo(() => filedCases(cases), [cases]);
+  const merchant = useStore((s) => s.merchant);
+  const list = useMemo(() => filedCases(cases, merchant), [cases, merchant]);
   return (
     <>
       {list.map((c) => (
@@ -500,7 +504,8 @@ function Waiting({ c }: { c: CaseFile }) {
 
 function WaitingCases() {
   const cases = useStore((s) => s.cases);
-  const list = useMemo(() => waitingCases(cases).slice(0, 6), [cases]);
+  const merchant = useStore((s) => s.merchant);
+  const list = useMemo(() => waitingCases(cases).filter(mine(merchant)).slice(0, 6), [cases, merchant]);
   return (
     <>
       {list.map((c) => (
@@ -682,6 +687,7 @@ const openCases = (cases: Record<string, CaseFile>) =>
     .slice(0, 14);
 
 function BoxLabels() {
+  const merchant = useStore((s) => s.merchant);
   const cases = useStore((s) => s.cases);
   const open = useStore((s) => s.open);
   const hover = useStore((s) => (s.hover ? s.cases[s.hover] : undefined));
@@ -710,7 +716,7 @@ function BoxLabels() {
       <Label anchor="side:after" className="gate-text side">
         Settled
       </Label>
-      {openCases(cases).map((c) =>
+      {openCases(cases).filter(mine(merchant)).map((c) =>
         c.status === 'awaiting_approval' ? (
           <Label key={`w${c.id}`} anchor={`wait:${c.id}`} className="gate-tag wait" onClick={() => open(c.id)}>
             <b>Waiting for you</b>

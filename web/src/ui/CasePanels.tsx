@@ -44,7 +44,11 @@ function InvestigatorCard({ c, role }: { c: CaseFile; role: Role }) {
             <span className="q">{QUESTION[role]}</span>
           </div>
         </div>
-        <p className="idle">Not needed yet. The payment was stopped before it settled, so there is no claim to examine.</p>
+        <p className="idle">
+          {c.network
+            ? 'Not needed. The network already knew this attack.'
+            : 'Not needed yet. The payment was stopped before it settled, so there is no claim to examine.'}
+        </p>
       </div>
     );
   }
@@ -333,11 +337,12 @@ function WhatIf({ c }: { c: CaseFile }) {
 
 export function CaseInfo({ c }: { c: CaseFile }) {
   const back = useStore((s) => s.back);
+  const backTo = useStore((s) => (s.from === 'live' && s.merchant ? s.merchant : 'Network'));
   const p = c.purchase;
   return (
     <aside className="case-info">
       <button className="backlink" onClick={back}>
-        ← Live view
+        ← {backTo}
       </button>
       <div className="case-title">
         <span className="mono">{c.id}</span>
@@ -355,7 +360,14 @@ export function CaseInfo({ c }: { c: CaseFile }) {
           What-if re-run of <button onClick={() => useStore.getState().open(c.whatIfOf!)}>{c.whatIfOf}</button> with the limit set to {eur(c.mandate.maxAmount, 0)}
         </div>
       )}
-      {c.stage === 'hold' ? (
+      {c.network ? (
+        <blockquote className="held network">
+          <label>Stopped by the network</label>
+          This payment carried {c.network.label}. The network learned that attack from{' '}
+          <button onClick={() => useStore.getState().open(c.network!.sourceCaseId)}>{c.network.sourceCaseId}</button> at {c.network.sourceMerchant}, so it
+          was blocked on arrival.
+        </blockquote>
+      ) : c.stage === 'hold' ? (
         <blockquote className="held">
           <label>Held before settlement</label>
           The screen stopped this payment: {c.flag ?? 'checking'}.

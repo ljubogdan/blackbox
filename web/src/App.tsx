@@ -7,6 +7,7 @@ import { Builder } from './ui/Builder';
 import { TopBar } from './ui/TopBar';
 import { CaseScene } from './views/CaseScene';
 import { GateScene } from './views/Gate';
+import { NetworkScene } from './views/Network';
 
 export function App() {
   const view = useStore((s) => s.view);
@@ -16,10 +17,11 @@ export function App() {
   const connected = useStore((s) => s.connected);
   const builder = useStore((s) => s.builder);
   const engine = useStore((s) => s.engine);
-  const entering = useStore((s) => !!s.entering);
+  const entering = useStore((s) => !!s.entering || !!s.boxing);
+  const merchant = useStore((s) => s.merchant);
 
   useEffect(() => connect(), []);
-  // The first seconds after loading: the box and the question alone, then the rest arrives.
+  // The first seconds after loading: the scene alone, then the rest arrives.
   const [opening, setOpening] = useState(true);
   useEffect(() => {
     const id = setTimeout(() => setOpening(false), 4200);
@@ -50,9 +52,7 @@ export function App() {
         </main>
       ) : (
         <>
-          <div className="stage live">
-            <GateScene />
-          </div>
+          <div className="stage live">{view === 'network' ? <NetworkScene /> : <GateScene key={merchant ?? ''} />}</div>
           <LivePanels />
         </>
       )}

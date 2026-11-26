@@ -153,6 +153,8 @@ export interface CaseFile {
   investigators: Record<Role, InvestigatorState>;
   arbiter: { status: 'waiting' | 'deliberating' | 'awaiting_approval' | 'done' | 'failed'; ruling?: Ruling };
   settlement?: SettlementLine[];
+  // Set when the payment matched an attack the network had already learned at another merchant.
+  network?: { signature: string; label: string; sourceCaseId: string; sourceMerchant: string };
   // Scenario ground truth. Only attached once the case is closed, never shown to the agents.
   truth?: Record<Party, number>;
   log: { t: number; who: string; text: string }[];
@@ -180,6 +182,9 @@ export interface Stats {
   prevented: number; // value of payments blocked before settlement
   challenges: number;
   revised: number; // findings changed after a challenge
+  networkCaught: number; // payments blocked on arrival by a signature learned at another merchant
+  networkPrevented: number; // their value
+  signatures: number;
   board: { providers: BoardRow[]; merchants: BoardRow[] };
 }
 
@@ -190,6 +195,19 @@ export interface BoardRow {
   cases: number;
   atFault: number; // loss attributed to this party by rulings
   bps: number; // what the guarantee should cost for this party, in basis points
+}
+
+// An attack the network has learned from a ruling, and now recognises at every merchant.
+export interface Signature {
+  id: string; // e.g. widget:reviewly-cdn.example or device:vm-chrome-3fa2
+  kind: 'widget' | 'device';
+  value: string;
+  label: string; // how a person would describe it
+  learnedFrom: string; // case id
+  merchant: string; // where it was learned
+  at: number;
+  catches: number; // payments blocked on arrival because of it
+  prevented: number; // value of those payments
 }
 
 export interface Lane {
@@ -209,7 +227,8 @@ export interface EngineInfo {
 }
 
 export type ServerMsg =
-  | { type: 'hello'; info: EngineInfo; stats: Stats; cases: CaseFile[]; purchases: PurchaseLite[]; lanes: Lane[]; now: number }
+  | { type: 'hello'; info: EngineInfo; stats: Stats; cases: CaseFile[]; purchases: PurchaseLite[]; lanes: Lane[]; signatures: Signature[]; now: number }
+  | { type: 'signature'; signature: Signature; fresh: boolean }
   | { type: 'purchase'; purchase: PurchaseLite }
   | { type: 'case'; case: CaseFile }
   | { type: 'stats'; stats: Stats }
@@ -252,3 +271,19 @@ export const CATALOG_PRICES = [104, 229, 349, 279, 319, 139, 189, 949, 259, 199,
 
 // Invented names of the companies whose shopping agents make the purchases.
 export const PROVIDER_NAMES = ['Orbit Assist', 'Kestrel Agent', 'Mira Shopper', 'Pilot One', 'Tandem'];
+
+// Invented merchants. Each one runs its own Blackbox; together they are the network.
+export const MERCHANTS: (GeoPoint & { name: string })[] = [
+  { name: 'Northwind Outfitters', city: 'Seattle', country: 'US', lat: 47.61, lon: -122.33 },
+  { name: 'Lumen Electronics', city: 'Shanghai', country: 'CN', lat: 31.23, lon: 121.47 },
+  { name: 'Halden Home', city: 'Stockholm', country: 'SE', lat: 59.33, lon: 18.07 },
+  { name: 'Pikto Tech', city: 'Berlin', country: 'DE', lat: 52.52, lon: 13.4 },
+  { name: 'Sava Sport', city: 'Belgrade', country: 'RS', lat: 44.79, lon: 20.45 },
+  { name: 'Maison Clary', city: 'Paris', country: 'FR', lat: 48.86, lon: 2.35 },
+  { name: 'Kumo Audio', city: 'Tokyo', country: 'JP', lat: 35.68, lon: 139.69 },
+  { name: 'Brightcart', city: 'London', country: 'GB', lat: 51.51, lon: -0.13 },
+  { name: 'Terra Verde Market', city: 'São Paulo', country: 'BR', lat: -23.55, lon: -46.63 },
+  { name: 'Orchard Lane', city: 'New York', country: 'US', lat: 40.71, lon: -74.01 },
+  { name: 'Meridian Supply', city: 'Singapore', country: 'SG', lat: 1.35, lon: 103.82 },
+  { name: 'Coastline Goods', city: 'Sydney', country: 'AU', lat: -33.87, lon: 151.21 },
+];

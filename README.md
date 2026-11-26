@@ -29,7 +29,11 @@ npm run start        # production build, served by the engine on http://localhos
 
 ## What you see
 
-**Live view.** A glass box that every purchase made by a shopping agent passes through. Its three axes each mean one thing:
+**Network.** The first screen: one glass box per merchant, linked into a mesh. Every merchant runs its own Blackbox, and the boxes learn from each other. When a ruling confirms an attack (hidden text planted by a third-party review widget, or a stolen agent token replayed from one device), the Network agent keeps its signature and a pulse spreads from that merchant's box to every other. When the same attack lands at another merchant, the Sentinel recognises it and blocks the payment on arrival, with no investigation: that box flashes red and a line points back to the merchant the knowledge came from. **Stopped by the network** in the top bar counts those payments; the **Network** tab lists every learned attack, what it has stopped, and the case it was learned from. Attacks arrive as campaigns: the same widget or device lands at a different merchant each time.
+
+Click a box to fly into it.
+
+**Merchant box.** One merchant's glass box, which every purchase made by a shopping agent passes through. Its three axes each mean one thing:
 
 - **Length is where the payment is:** before settlement, inside the box, settled. Inside, the box has a bay where held payments wait, then one bay for each party a ruling can hold liable.
 - **Height is the order value** (log scale).
@@ -65,7 +69,7 @@ Twelve participants share one Mozaik runtime. Nobody calls anybody: each declare
 | Participant | Kind | Wakes on | Does |
 |---|---|---|---|
 | Intake | code | — | Publishes `purchase.settled`, `purchase.pending` and `dispute.opened` |
-| Sentinel | code | `purchase.pending` | Screens the payment with plain rules; holds the risky ones (`purchase.held`) |
+| Sentinel | code | `purchase.pending` | Blocks a payment that matches a learned attack on arrival; otherwise screens it with plain rules and holds the risky ones (`purchase.held`) |
 | Mandate Analyst | model | `purchase.held`, `dispute.opened` | Did the agent stay inside its instruction? |
 | Session Forensics | model | `purchase.held`, `dispute.opened` | Was this the owner's own session? |
 | Listing Auditor | model | `purchase.held`, `dispute.opened` | Did the merchant charge what it advertised? |
@@ -75,6 +79,7 @@ Twelve participants share one Mozaik runtime. Nobody calls anybody: each declare
 | Arbiter | model | `case.ready` | Splits liability between the four parties |
 | Risk officer | human | — | Approves or rejects rulings on large orders |
 | Ledger | code | `ruling.issued` | Blocks or releases a hold; computes the money on a dispute; keeps the risk board |
+| Network | code | `case.closed` | Learns an attack's signature from a confirming ruling and shares it with every merchant; credits each catch to the signature that made it |
 | Bridge | code | everything | Streams events to the browser, measures concurrency |
 
 ### How they run concurrently
@@ -128,11 +133,13 @@ Merchant and agent-provider names are invented.
 server/            Mozaik engine
   agents/team.ts     every participant and its situation handlers
   agents/tools.ts    read_evidence, submit_finding, issue_ruling
+  agents/network.ts  attack signatures: what the network learns and recognises
   agents/verify.ts   citation checking
   model/             scripted stand-in and the guarded runner
   data/              synthetic world and scenarios
 web/src/           React + three.js client
-  views/Gate.tsx       live view: the box
+  views/Network.tsx    the network of merchant boxes
+  views/Gate.tsx       one merchant's box
   views/CaseScene.tsx  the corridor replay
 shared/types.ts    types shared by both
 scripts/proof.ts   headless run
