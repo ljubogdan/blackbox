@@ -82,7 +82,7 @@ function InvestigatorCard({ c, role }: { c: CaseFile; role: Role }) {
               <span>“{ch.point}”</span>
               {ch.status === 'answered' && (
                 <em>
-                  {ch.stance === 'revise' ? `Revised ${ch.before} → ${f.liability}. ` : 'Maintained. '}
+                  {ch.stance === 'revise' ? `Revised ${ch.before} → ${f.liability}. ` : /^maintained\b/i.test(ch.reply ?? '') ? '' : 'Maintained. '}
                   {ch.reply}
                 </em>
               )}

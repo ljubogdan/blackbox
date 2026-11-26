@@ -203,7 +203,7 @@ wss.on('connection', (ws) => {
     } else if (msg.type === 'custom') {
       const { item, max, sabotage, stage } = msg.spec ?? ({} as never);
       const valid = sabotage === 'clean' || (SCENARIOS as readonly string[]).includes(sabotage);
-      const id = valid ? openCase(sabotage, { item: Number(item), max: Number(max), stage: stage === 'hold' ? 'hold' : 'dispute' }, true) : null;
+      const id = valid ? openCase(sabotage, { item: Number(item), max: Number.isFinite(Number(max)) ? Number(max) : undefined, stage: stage === 'hold' ? 'hold' : 'dispute' }, true) : null;
       if (id) send(ws, { type: 'created', caseId: id, nonce: String(msg.nonce) });
     } else if (msg.type === 'whatif') {
       const id = whatIf(String(msg.caseId), Number(msg.max));
