@@ -1,0 +1,213 @@
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { extname, join as joinPath, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { DefaultInferenceRunner, supportedModels } from '@mozaik-ai/core';
+import { WebSocketServer, type WebSocket } from 'ws';
+import type { ClientMsg, EngineInfo, Sabotage, ServerMsg } from '../shared/types';
+import { SCENARIOS } from '../shared/types';
+import { assembleTeam } from './agents/team';
+import { config } from './config';
+import { buildCase, buildPurchase, cloneWithLimit, type BuildOptions } from './data/scenarios';
+import { GuardedRunner } from './model/guard';
+import { ScriptedRunner } from './model/scripted';
+import { Rng } from './rng';
+import { initializeRuntime, publish, state } from './runtime';
+import { BlackboxState, ui } from './state';
+
+// Mozaik's cloud client repeats this notice for every loop; once is enough.
+const warn = console.warn;
+let toldAboutCloud = false;
+console.warn = (...args: unknown[]) => {
+  if (typeof args[0] === 'string' && args[0].startsWith('mozaik cloud: no API key')) {
+    if (toldAboutCloud) return;
+    toldAboutCloud = true;
+  }
+  warn(...args);
+};
+
+// A stray rejection inside an agent loop must not take the whole room down.
+process.on('unhandledRejection', (e) => console.error('[unhandled]', e));
+
+const inner =
+  config.mode === 'live'
+    ? new DefaultInferenceRunner(supportedModels, { validate() {} } as never)
+    : new ScriptedRunner(config.seed, config.faultRate);
+const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, 90_000, config.maxRpm);
+
+initializeRuntime({ state: new BlackboxState(), inferenceRunnerConfig: { runner } });
+const team = assembleTeam();
+const rng = new Rng(config.seed);
+
+const info: EngineInfo = {
+  mode: config.mode,
+  model: config.mode === 'live' ? `${config.investigatorModel} + ${config.arbiterModel}` : 'scripted stand-in (no API key)',
+  faultRate: config.faultRate,
+  approvalThreshold: config.approvalThreshold,
+  participants: team.roster,
+};
+
+// ───────────────────────── synthetic Black Friday stream ─────────────────────────
+
+let purchaseN = 0;
+let caseN = 0;
+let paused = false;
+let bag: { sabotage: Sabotage; stage: 'hold' | 'dispute' }[] = [];
+
+// One round of the bag: every kind of fault once as a dispute after the fact,
+// every kind the screen can catch once as a hold, and one clean payment that
+// gets held and released.
+function nextScenario() {
+  if (bag.length === 0) {
+    bag = [
+      ...SCENARIOS.map((sabotage) => ({ sabotage, stage: 'dispute' as const })),
+      ...SCENARIOS.filter((x) => x !== 'friendly').map((sabotage) => ({ sabotage, stage: 'hold' as const })),
+      { sabotage: 'clean' as const, stage: 'hold' as const },
+    ].sort(() => rng.next() - 0.5);
+  }
+  return bag.pop()!;
+}
+
+function remember(p: ReturnType<typeof buildPurchase>) {
+  const s = state();
+  s.purchases.push(p);
+  if (s.purchases.length > 90) s.purchases.shift();
+}
+
+function tickPurchase() {
+  if (!paused) {
+    const p = buildPurchase(rng, ++purchaseN, Date.now());
+    remember(p);
+    publish('purchase.settled', team.intake.getId(), { purchase: p });
+  }
+  setTimeout(tickPurchase, rng.range(260, 800));
+}
+
+function register(caseFile: ReturnType<typeof buildCase>['caseFile']) {
+  const s = state();
+  for (const e of caseFile.evidence) s.evidence.set(e.id, e);
+  s.cases.set(caseFile.id, caseFile);
+}
+
+function openCase(sabotage: Sabotage, opts: BuildOptions = {}, custom = false): string | null {
+  if (caseN >= config.maxCases) return null;
+  const s = state();
+  const { caseFile, truth } = buildCase(rng, ++caseN, sabotage, ++purchaseN, Date.now(), opts);
+  caseFile.custom = custom || undefined;
+  register(caseFile);
+  // A limit set by hand changes what the right answer is, so there is no ground truth to score against.
+  if (opts.max === undefined) s.truths.set(caseFile.id, truth);
+  remember(caseFile.purchase);
+  if (caseFile.stage === 'hold') {
+    // Not settled yet: the Sentinel decides whether to stop it.
+    publish('purchase.pending', team.intake.getId(), { purchase: caseFile.purchase, caseId: caseFile.id });
+  } else {
+    s.stats.disputesOpened++;
+    publish('purchase.settled', team.intake.getId(), { purchase: caseFile.purchase });
+    publish('dispute.opened', team.intake.getId(), { caseId: caseFile.id });
+  }
+  return caseFile.id;
+}
+
+// Run an existing case again with a different spending limit.
+function whatIf(caseId: string, max: number): string | null {
+  const s = state();
+  const source = s.cases.get(caseId);
+  if (!source || caseN >= config.maxCases) return null;
+  const clone = cloneWithLimit(source, ++caseN, Math.max(10, Math.min(5000, Math.round(max))), Date.now());
+  register(clone);
+  if (clone.stage === 'hold') {
+    publish('purchase.pending', team.intake.getId(), { purchase: { ...clone.purchase, id: `${clone.purchase.id}-${clone.id}` }, caseId: clone.id });
+  } else {
+    s.stats.disputesOpened++;
+    publish('dispute.opened', team.intake.getId(), { caseId: clone.id });
+  }
+  return clone.id;
+}
+
+function disputeTick() {
+  if (paused) return;
+  const open = [...state().cases.values()].filter((c) => c.status === 'investigating' || c.status === 'arbitrating').length;
+  if (open >= config.maxOpenCases) return;
+  const next = nextScenario();
+  openCase(next.sabotage, { stage: next.stage });
+}
+
+// ───────────────────────── http + websocket ─────────────────────────
+
+const dist = joinPath(fileURLToPath(new URL('.', import.meta.url)), '..', 'dist');
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.woff2': 'font/woff2',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+};
+
+const server = createServer((req, res) => {
+  const path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^(\.\.[/\\])+/, '');
+  let file = joinPath(dist, path === '/' ? 'index.html' : path);
+  if (!file.startsWith(dist) || !existsSync(file) || !statSync(file).isFile()) file = joinPath(dist, 'index.html');
+  if (!existsSync(file)) {
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('Blackbox engine is running. Start the UI with `npm run dev`, or build it with `npm run build`.');
+    return;
+  }
+  res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
+  createReadStream(file).pipe(res);
+});
+
+const wss = new WebSocketServer({ server, path: '/ws' });
+const send = (ws: WebSocket, msg: ServerMsg) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(msg));
+
+ui.on('msg', (msg: ServerMsg) => {
+  const raw = JSON.stringify(msg);
+  for (const ws of wss.clients) if (ws.readyState === ws.OPEN) ws.send(raw);
+});
+
+wss.on('connection', (ws) => {
+  const s = state();
+  send(ws, {
+    type: 'hello',
+    info,
+    stats: { ...s.stats },
+    cases: [...s.cases.values()],
+    purchases: s.purchases,
+    lanes: s.lanes.slice(-200),
+    now: Date.now(),
+  });
+  ws.on('message', (raw) => {
+    let msg: ClientMsg;
+    try {
+      msg = JSON.parse(String(raw));
+    } catch {
+      return;
+    }
+    if (msg.type === 'approve') {
+      // The human's decision enters the runtime as an event from the Risk officer.
+      publish('approval.decided', team.officer.getId(), { caseId: msg.caseId, approved: !!msg.approved });
+    } else if (msg.type === 'trigger' && (SCENARIOS as readonly string[]).includes(msg.scenario)) {
+      openCase(msg.scenario as Sabotage);
+    } else if (msg.type === 'custom') {
+      const { item, max, sabotage, stage } = msg.spec ?? ({} as never);
+      const valid = sabotage === 'clean' || (SCENARIOS as readonly string[]).includes(sabotage);
+      const id = valid ? openCase(sabotage, { item: Number(item), max: Number(max), stage: stage === 'hold' ? 'hold' : 'dispute' }, true) : null;
+      if (id) send(ws, { type: 'created', caseId: id, nonce: String(msg.nonce) });
+    } else if (msg.type === 'whatif') {
+      const id = whatIf(String(msg.caseId), Number(msg.max));
+      if (id) send(ws, { type: 'created', caseId: id, nonce: String(msg.nonce) });
+    } else if (msg.type === 'pace') {
+      paused = !!msg.paused;
+    }
+  });
+});
+
+server.listen(config.port, () => {
+  console.log(`Blackbox engine on http://localhost:${config.port}  ·  mode: ${info.mode}  ·  model: ${info.model}`);
+  console.log(`Participants: ${team.roster.map((p) => `${p.name} (${p.kind})`).join(', ')}`);
+  tickPurchase();
+  setTimeout(() => openCase('injection', { stage: 'hold' }), 1800);
+  setInterval(disputeTick, config.disputeEveryMs);
+});

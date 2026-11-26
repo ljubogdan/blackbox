@@ -1,0 +1,61 @@
+import { useEffect } from 'react';
+import { connect, useStore } from './store';
+import { CaseInfo, Inspector, Investigators, Verdict } from './ui/CasePanels';
+import { Lanes } from './ui/Lanes';
+import { LivePanels } from './ui/LivePanels';
+import { Builder } from './ui/Builder';
+import { TopBar } from './ui/TopBar';
+import { TourCaption } from './ui/Tour';
+import { CaseScene } from './views/CaseScene';
+import { GlobeScene } from './views/Globe';
+
+export function App() {
+  const view = useStore((s) => s.view);
+  const selected = useStore((s) => s.selected);
+  const c = useStore((s) => (s.selected ? s.cases[s.selected] : undefined));
+  const back = useStore((s) => s.back);
+  const connected = useStore((s) => s.connected);
+  const builder = useStore((s) => s.builder);
+
+  useEffect(() => connect(), []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && (useStore.getState().builder ? useStore.getState().set({ builder: false }) : back());
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [back]);
+
+  const inCase = view === 'case' && !!c;
+  return (
+    <div className="app">
+      <TopBar />
+      {inCase ? (
+        <main className="case-view" key={selected}>
+          <div className="stage">
+            <CaseScene c={c!} />
+            <CaseInfo c={c!} />
+            <Inspector c={c!} />
+            <div className="readme3d">
+              <b>How to read this</b> Height is money: the ceiling is the owner's limit. Width is scope: the walls are the owner's own agent
+              session. The line is the agent's recorded journey.
+            </div>
+          </div>
+          <section className="dock">
+            <Investigators c={c!} />
+            <Verdict c={c!} />
+          </section>
+        </main>
+      ) : (
+        <>
+          <div className="stage live">
+            <GlobeScene />
+          </div>
+          <LivePanels />
+        </>
+      )}
+      <Lanes caseId={inCase ? c!.id : null} />
+      <TourCaption />
+      {builder && <Builder />}
+      {!connected && <div className="offline">Connecting to the engine…</div>}
+    </div>
+  );
+}
