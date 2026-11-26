@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { BoardRow, CaseFile, Signature } from '../../../shared/types';
-import { PARTIES, PARTY_NAME } from '../../../shared/types';
+import { MERCHANTS, PARTIES, PARTY_NAME } from '../../../shared/types';
 import { caseList, eur, PARTY_COLOR, useStore, type Lens } from '../store';
 import { CaseState } from './State';
 
@@ -99,7 +99,8 @@ export function LivePanels() {
   const cases = useStore((s) => s.cases);
   const stats = useStore((s) => s.stats);
   const view = useStore((s) => s.view);
-  const merchant = useStore((s) => (s.view === 'live' ? s.merchant : null));
+  const merchant = useStore((s) => (s.view === 'live' ? s.merchant : s.view === 'network' ? s.focus : null));
+  const focusCity = useStore((s) => s.focusCity);
   const list = caseList(cases).filter((c) => !merchant || c.purchase.merchant.name === merchant);
   const [tab, setTab] = useState<'cases' | 'network' | 'board'>('cases');
   const lens = useStore((s) => s.lens);
@@ -134,7 +135,15 @@ export function LivePanels() {
         </header>
         {tab === 'cases' ? (
           <div className="scroll">
-            {list.length === 0 && <div className="empty">Waiting for the first case…</div>}
+            {view === 'network' && merchant && (
+              <button className="focus-chip" onClick={() => focusCity(null)} title="Show every merchant's cases">
+                <span>
+                  <b>{merchant}</b> · {MERCHANTS.find((m) => m.name === merchant)?.city}
+                </span>
+                <i aria-hidden>×</i>
+              </button>
+            )}
+            {list.length === 0 && <div className="empty">{merchant ? 'No cases at this merchant yet.' : 'Waiting for the first case…'}</div>}
             {list.map((c) => (
               <CaseRow key={c.id} c={c} />
             ))}

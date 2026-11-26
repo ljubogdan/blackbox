@@ -2116,3 +2116,67 @@ blockquote.held.network button {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* ───────── the globe ───────── */
+
+.net-name.city {
+  transition: opacity 0.2s ease;
+}
+.net-name.city.below {
+  transform: translate(-50%, 9px);
+}
+.net-name.city.above {
+  transform: translate(-50%, calc(-100% - 12px));
+}
+.net-name.city.left {
+  align-items: flex-end;
+  transform: translate(calc(-100% - 12px), -50%);
+}
+.net-name.city.right {
+  align-items: flex-start;
+  transform: translate(12px, -50%);
+}
+.net-name.city.below-left {
+  align-items: flex-end;
+  transform: translate(calc(-100% + 4px), 9px);
+}
+.net-name.city.below-right {
+  align-items: flex-start;
+  transform: translate(-4px, 9px);
+}
+.net-name.city b {
+  font-size: 12px;
+}
+.net-name.city.on b {
+  color: #fff;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+}
+.focus-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: calc(100% - 24px);
+  margin: 10px 12px 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.focus-chip b {
+  color: var(--text);
+  font-weight: 600;
+}
+.focus-chip i {
+  font-style: normal;
+  font-size: 15px;
+  line-height: 1;
+}
+.focus-chip:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}

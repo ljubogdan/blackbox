@@ -7,7 +7,7 @@ import { Builder } from './ui/Builder';
 import { TopBar } from './ui/TopBar';
 import { CaseScene } from './views/CaseScene';
 import { GateScene } from './views/Gate';
-import { NetworkScene } from './views/Network';
+import { GlobeScene } from './views/Globe';
 
 export function App() {
   const view = useStore((s) => s.view);
@@ -52,7 +52,7 @@ export function App() {
         </main>
       ) : (
         <>
-          <div className="stage live">{view === 'network' ? <NetworkScene /> : <GateScene key={merchant ?? ''} />}</div>
+          <div className="stage live">{view === 'network' ? <GlobeScene /> : <GateScene key={merchant ?? ''} />}</div>
           <LivePanels />
         </>
       )}

@@ -56,6 +56,8 @@ interface Store {
   signatures: Record<string, Signature>;
   waves: { merchant: string; label: string; at: number }[]; // signatures learned while this page was open
   catches: { caseId: string; merchant: string; source: string; total: number; at: number }[]; // payments the network stopped
+  focus: string | null; // the merchant whose city the globe has turned to; the case list shows only its cases
+  focusCity: (merchant: string | null) => void;
   enterBox: (merchant: string) => void;
   toNetwork: () => void;
   limitPreview: number | null; // the limit being tried on the what-if slider
@@ -106,6 +108,8 @@ export const useStore = create<Store>((set, get) => ({
   signatures: {},
   waves: [],
   catches: [],
+  focus: null,
+  focusCity: (focus) => set({ focus, hover: null }),
   limitPreview: null,
   pageMode: 'human',
   awaiting: null,
@@ -129,6 +133,7 @@ export const useStore = create<Store>((set, get) => ({
   },
   // One level up: case to wherever it was opened from, box to the network.
   back: () => {
+    if (get().view === 'network' && get().focus) return set({ focus: null });
     const box = caseBox(get());
     if (box) return set({ view: 'live', merchant: box, inspect: null, limitPreview: null, entering: null });
     get().toNetwork();
