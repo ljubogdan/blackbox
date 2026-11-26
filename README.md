@@ -24,6 +24,7 @@ Open http://localhost:5173. No API key is needed: without one, the agents run on
 
 ```bash
 npm run proof        # headless: run 8 disputes, print rulings and measured concurrency
+npm test             # the Verifier, the hash chain, the Ledger's sums, and tool calls in the loop
 npm run start        # production build, served by the engine on http://localhost:8787
 ```
 
@@ -94,7 +95,7 @@ Twelve participants share one Mozaik runtime. Nobody calls anybody: each declare
 ### Care with financial data
 
 - Every number an agent reports must be cited, and every citation is checked in code against the record it names.
-- No model produces a money amount. The Arbiter outputs percentages; the Ledger computes `order total × share` and shows the formula and its source next to each line ([server/agents/team.ts](server/agents/team.ts)).
+- No model produces a money amount. The Arbiter outputs percentages; the Ledger computes `order total × share` in whole cents and shows the formula and its source next to each line ([server/agents/team.ts](server/agents/team.ts)). On a shared ruling the amounts recovered and absorbed always add up to the refund: the odd cent goes to the share that rounding cut the most.
 - Records are sealed in a hash chain when a case opens ([server/data/scenarios.ts](server/data/scenarios.ts)): each hash covers the record and the hash before it. The Verifier recomputes a record's hash before accepting any citation to it, and re-walks the chain each time.
 - The scenario's ground truth is kept apart from the evidence and is never given to an agent. It is shown only after a case closes. Cases with a hand-set limit have no ground truth and are not scored.
 
@@ -143,12 +144,13 @@ web/src/           React + three.js client
   views/CaseScene.tsx  the corridor replay
 shared/types.ts    types shared by both
 scripts/proof.ts   headless run
+tests/             node:test suites, run with npm test
 ```
 
 ## Known gaps
 
 - Live mode is untested end to end. The one attempt ran into a free-tier quota of 20 requests a day, about one case. `MAX_RPM` paces calls for low quotas.
 - Not exercised in a browser yet: the evidence-pack download and the sound cues.
-- The scripted model returns one tool call per inference; Mozaik also runs only the first tool call of a model response, so a real model that emits parallel tool calls will have the rest dropped.
+- Mozaik's loop runs only the first tool call of a model response. When a model asks for several at once, the guarded runner ([server/model/guard.ts](server/model/guard.ts)) hands the rest to the loop one at a time, so each is run, intercepted and recorded without another model call. This is covered by a test against Mozaik's loop with a scripted model, but not yet by a real provider: the scripted stand-in only ever returns one call per inference.
 - Nothing is persisted: restarting the engine starts a new run.
 - The UI is built for desktop widths (about 1,300 px and up is best).

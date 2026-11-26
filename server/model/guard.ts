@@ -1,4 +1,13 @@
-import { ModelMessageItem, type InferenceInput, type InferenceOutput, type InferenceRunner, type SemanticEvent } from '@mozaik-ai/core';
+import {
+  FunctionCallItem,
+  FunctionCallOutputItem,
+  ModelMessageItem,
+  type InferenceInput,
+  type InferenceOutput,
+  type InferenceRunner,
+  type ModelContext,
+  type SemanticEvent,
+} from '@mozaik-ai/core';
 
 // Wraps whichever runner is in use. Mozaik does not catch a rejected loop, so a
 // provider error would surface as an unhandled rejection; here it becomes a
@@ -61,14 +70,50 @@ export class GuardedRunner implements InferenceRunner {
     this.waiters.shift()?.();
   }
 
+  // Mozaik's loop runs one tool call per model response: the first. A model that asks for several
+  // at once would have the rest dropped, so they wait here and are handed to the loop one at a
+  // time, each as a step of its own. Every call is run and recorded before the model is asked again.
+  private waiting = new Map<string, { after: string; calls: FunctionCallItem[] }>(); // by context id
+
+  // The calls waiting for this context, if the loop is where they expect it to be: the context
+  // must end with the result of the call handed out last. Otherwise the turn moved on without them.
+  private queueFor(context: ModelContext) {
+    const q = this.waiting.get(context.id);
+    if (!q) return null;
+    const last = context.getItems().at(-1);
+    if (last instanceof FunctionCallOutputItem && last.callId === q.after) return q;
+    this.waiting.delete(context.id);
+    return null;
+  }
+
+  // True when the next step for this context is a waiting tool call, not a model call.
+  hasQueued(context: ModelContext): boolean {
+    return this.queueFor(context) !== null;
+  }
+
+  private oneCallAtATime(contextId: string, output: InferenceOutput): InferenceOutput {
+    const calls = output.items.filter((it): it is FunctionCallItem => it instanceof FunctionCallItem);
+    if (calls.length < 2) return output;
+    this.waiting.set(contextId, { after: calls[0].callId, calls: calls.slice(1) });
+    return { ...output, items: output.items.filter((it) => !(it instanceof FunctionCallItem) || it === calls[0]) };
+  }
+
   async run(request: InferenceInput): Promise<InferenceOutput> {
+    const q = this.queueFor(request.context);
+    if (q) {
+      const next = q.calls.shift()!;
+      q.after = next.callId;
+      if (q.calls.length === 0) this.waiting.delete(request.context.id);
+      return { items: [next], tokenUsage: undefined, rowResponse: null };
+    }
+
     const seen = (this.perContext.get(request.context.id) ?? 0) + 1;
     this.perContext.set(request.context.id, seen);
     if (seen > this.maxPerContext) return this.fail('inference limit reached for this context');
 
     await this.acquire();
     try {
-      return await this.attempt(request);
+      return this.oneCallAtATime(request.context.id, await this.attempt(request));
     } catch (e) {
       return this.fail(e instanceof Error ? e.message : String(e));
     } finally {

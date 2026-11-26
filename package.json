@@ -8,7 +8,8 @@
     "build": "vite build",
     "start": "vite build && tsx server/index.ts",
     "proof": "tsx scripts/proof.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "tsx --test \"tests/*.test.ts\""
   },
   "keywords": [],
   "author": "",

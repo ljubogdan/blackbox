@@ -15,7 +15,8 @@ import type { BoardRow, CaseFile, Lane, Party, PurchaseLite, Role, Ruling, Settl
 import { PARTIES, PARTY_NAME, ROLE_NAME, ROLES } from '../../shared/types';
 import { config } from '../config';
 import { round2 } from '../rng';
-import { join, note, publish, pushCase, runLoop, state } from '../runtime';
+import { GuardedRunner } from '../model/guard';
+import { join, note, publish, pushCase, resolveRuntime, runLoop, state } from '../runtime';
 import { keyOf, push, splitKey } from '../state';
 import { chainIntegrity } from '../data/scenarios';
 import { ARBITER_INSTRUCTION, arbiterBrief, caseBrief, challengeBrief, investigatorInstruction } from './prompts';
@@ -460,28 +461,38 @@ function createSentinel(): Agent {
 
 // ───────────────────────── ledger (code) ─────────────────────────
 
-// Money is never produced by a model: every amount is order total x share, in code.
-function settle(c: CaseFile, ruling: Ruling): SettlementLine[] {
+// Money is never produced by a model: every amount is order total x share, in code, in whole cents.
+// The refund is rounded once. What is recovered or absorbed is then shared out so that those lines
+// add up to the refund exactly: rounding each share on its own can leave them a cent apart.
+export function settle(c: CaseFile, ruling: Ruling): SettlementLine[] {
   const ord = c.evidence.find((e) => e.kind === 'ORD')!;
   const total = Number(ord.data.total);
-  const share = (pct: number) => round2((total * pct) / 100);
+  const cents = Math.round(total * 100);
   const f = (pct: number) => `€${total.toFixed(2)} × ${pct}%`;
-  const lines: SettlementLine[] = [];
+  const source = `${ord.id}.total`;
   const refundPct = 100 - ruling.split.customer;
-  lines.push({
-    label: refundPct > 0 ? 'Refund to customer' : 'Claim denied — no refund',
-    party: 'customer',
-    formula: f(refundPct),
-    amount: share(refundPct),
-    source: `${ord.id}.total`,
-  });
-  if (ruling.split.agent_provider > 0)
-    lines.push({ label: `Recovered from ${c.purchase.provider}`, party: 'agent_provider', formula: f(ruling.split.agent_provider), amount: share(ruling.split.agent_provider), source: `${ord.id}.total` });
-  if (ruling.split.merchant > 0)
-    lines.push({ label: `Recovered from ${String(ord.data.merchant)}`, party: 'merchant', formula: f(ruling.split.merchant), amount: share(ruling.split.merchant), source: `${ord.id}.total` });
-  if (ruling.split.fraud > 0)
-    lines.push({ label: 'Absorbed by the guarantee', party: 'guarantee', formula: f(ruling.split.fraud), amount: share(ruling.split.fraud), source: `${ord.id}.total` });
-  return lines;
+  const refund = Math.round((cents * refundPct) / 100);
+
+  // Largest remainder: everyone gets their share rounded down, and the cents left over go to the
+  // shares that lost the most by it.
+  const payers = (['agent_provider', 'merchant', 'fraud'] as const).filter((p) => ruling.split[p] > 0);
+  const owed = new Map(payers.map((p) => [p, Math.floor((cents * ruling.split[p]) / 100)]));
+  let left = refund - [...owed.values()].reduce((sum, n) => sum + n, 0);
+  for (const p of [...payers].sort((a, b) => ((cents * ruling.split[b]) % 100) - ((cents * ruling.split[a]) % 100))) {
+    if (left <= 0) break;
+    owed.set(p, owed.get(p)! + 1);
+    left--;
+  }
+
+  const label: Record<(typeof payers)[number], string> = {
+    agent_provider: `Recovered from ${c.purchase.provider}`,
+    merchant: `Recovered from ${String(ord.data.merchant)}`,
+    fraud: 'Absorbed by the guarantee',
+  };
+  return [
+    { label: refundPct > 0 ? 'Refund to customer' : 'Claim denied — no refund', party: 'customer', formula: f(refundPct), amount: refund / 100, source },
+    ...payers.map((p): SettlementLine => ({ label: label[p], party: p === 'fraud' ? 'guarantee' : p, formula: f(ruling.split[p]), amount: owed.get(p)! / 100, source })),
+  ];
 }
 
 const top = (x: Record<Party, number>) => [...PARTIES].sort((a, b) => x[b] - x[a])[0];
@@ -665,6 +676,9 @@ function createBridge(): Agent {
           case 'inference.started': {
             const key = s.loopKey.get(p.loopId);
             if (!key) break;
+            // A tool call the model already asked for is being handed to the loop: no model is called.
+            const runner = resolveRuntime().getInferenceRunner();
+            if (runner instanceof GuardedRunner && runner.hasQueued(p.context)) break;
             const { caseId, agent } = splitKey(key);
             const lane: Lane = { loopId: `${p.loopId}#${++seq}`, agent, caseId, start: Date.now() };
             s.activeLanes.set(p.loopId, lane);
