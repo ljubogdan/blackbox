@@ -74,10 +74,6 @@ export function LivePanels() {
 
   return (
     <>
-      <section className="intro">
-        <h1>When an AI agent buys the wrong thing, who pays?</h1>
-        <p>Every purchase an AI agent makes passes through the box.</p>
-      </section>
       <div className="lens">
         <div className="seg" role="tablist" aria-label="Which side of the box to look at">
           {LENSES.map((l) => (

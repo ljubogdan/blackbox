@@ -9,11 +9,11 @@ const SABOTAGE: { id: Sabotage; title: string; text: string }[] = [
   { id: 'price_switch', title: 'Switch the price', text: 'The merchant charges more than the page showed.' },
   { id: 'hidden_fee', title: 'Hidden fee', text: 'A mandatory fee appears at the end, and the agent adds a warranty.' },
   { id: 'hijack', title: 'Steal the agent', text: "The agent's credentials are replayed from another device." },
-  { id: 'clean', title: 'Nothing at all', text: 'A perfectly good purchase. See what the team does with it.' },
+  { id: 'clean', title: 'Nothing', text: 'A valid purchase, to see a clean pass.' },
 ];
 
-// "Break it yourself": pick what the owner asked for, pick how to sabotage it,
-// and watch what the team makes of it.
+// The simulator: pick what the owner asked for and what goes wrong, and run it
+// through the same engine as every other purchase.
 export function Builder() {
   const close = () => useStore.getState().set({ builder: false });
   const request = useStore((s) => s.request);
@@ -33,11 +33,11 @@ export function Builder() {
 
   return (
     <div className="modal-back" onClick={close}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Break it yourself">
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Simulate a case">
         <header>
           <div>
-            <h2>Break it yourself</h2>
-            <p>Give a shopping agent an errand, then sabotage it. The team has to work out what happened from the records alone.</p>
+            <h2>Simulate a case</h2>
+            <p>Run a purchase with a known fault through Blackbox and see how it is handled.</p>
           </div>
           <button className="x" onClick={close} aria-label="Close">
             ×
@@ -45,7 +45,7 @@ export function Builder() {
         </header>
 
         <div className="step">
-          <label>1. The errand</label>
+          <label>1. The purchase</label>
           <div className="errand">
             <select value={item} onChange={(e) => pick(Number(e.target.value))}>
               {CATALOG_TITLES.map((t, i) => (
@@ -63,7 +63,7 @@ export function Builder() {
         </div>
 
         <div className="step">
-          <label>2. The sabotage</label>
+          <label>2. What goes wrong</label>
           <div className="options">
             {SABOTAGE.map((o) => (
               <button key={o.id} className={sabotage === o.id ? 'on' : ''} onClick={() => setSabotage(o.id)}>
@@ -89,9 +89,9 @@ export function Builder() {
         </div>
 
         <footer>
-          <span>Everything here is synthetic. No real purchase is made.</span>
+          <span>Simulated. No real purchase is made.</span>
           <button className="btn primary" onClick={launch}>
-            Run it
+            Run simulation
           </button>
         </footer>
       </div>

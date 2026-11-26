@@ -578,7 +578,7 @@ function Box() {
 
 const TARGET = new THREE.Vector3(0.2, 1.3, 0);
 const SCENE_W = 14;
-const SCENE_H = 6.6; // the box, the title above it and the lane names on the floor
+const SCENE_H = 6.6; // the box, the labels above it and the lane names on the floor
 
 // Where the camera stands for each reading of the box.
 const VIEW: Record<Lens, THREE.Vector3> = {
@@ -615,8 +615,7 @@ function Rig() {
     const free = Math.max(360, size.width - right);
     const half = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
     distance.current = Math.max(SCENE_W / 2 / (half * (free / size.height)), SCENE_H / 2 / half, 11);
-    // the headline and the view switch sit on the left, so the box stands a little right of centre and above it
-    cam.setViewOffset(size.width, size.height, right / 2 - size.width * 0.05, size.height * 0.035, size.width, size.height);
+    cam.setViewOffset(size.width, size.height, right / 2, 0, size.width, size.height);
     cam.updateProjectionMatrix();
   }, [camera, size.width, size.height]);
 

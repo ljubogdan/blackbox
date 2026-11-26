@@ -97,7 +97,7 @@ export function TopBar() {
           {tour ? 'Stop tour' : 'Guided tour'}
         </button>
         <button className="btn primary" onClick={() => set({ builder: true })}>
-          Break it yourself
+          Simulate
         </button>
         <span className="sep" />
         <button className="icon" onClick={() => set({ sound: !sound })} title={sound ? 'Sound on' : 'Sound off'} aria-pressed={sound}>

@@ -55,7 +55,7 @@ export async function startTour() {
   await wait(6500);
   if (!alive()) return;
 
-  say(7, 'Now try it: drag the spending limit to ask “what if?”, or press “Break it yourself”.');
+  say(7, 'Now try it: drag the spending limit to ask “what if?”, or run your own with Simulate.');
   await wait(6000);
   if (alive()) endTour();
 }
