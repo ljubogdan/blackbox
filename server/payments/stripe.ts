@@ -2,6 +2,7 @@
 // real money moving, so a live key is refused here rather than trusted to the person's care.
 
 export interface PaymentGateway {
+  run: string; // this engine run, in every payment's metadata, so one run can be told from another
   // Authorise without capturing: the money is reserved on the card but has not moved.
   authorise(ref: string, cents: number, description: string): Promise<string>;
   // Authorise and capture at once: a purchase that settled straight away.
@@ -47,9 +48,13 @@ export function stripeGateway(key: string, fetchFn: Fetch = fetch, run = Date.no
             capture_method: capture,
             confirm: 'true',
             payment_method: 'pm_card_visa', // Stripe's test card
-            'payment_method_types[]': 'card',
+            // Current accounts refuse payment_method_types. Without redirects, a card is confirmed
+            // here and needs no return_url.
+            'automatic_payment_methods[enabled]': 'true',
+            'automatic_payment_methods[allow_redirects]': 'never',
             description,
             'metadata[blackbox_case]': ref,
+            'metadata[blackbox_run]': run,
           },
           `${ref}-${capture}`,
         )
@@ -57,6 +62,7 @@ export function stripeGateway(key: string, fetchFn: Fetch = fetch, run = Date.no
     );
 
   return {
+    run,
     authorise: (ref, cents, description) => intent(ref, cents, description, 'manual'),
     charge: (ref, cents, description) => intent(ref, cents, description, 'automatic'),
     capture: async (id) => void (await post(`payment_intents/${id}/capture`, {}, `${id}-capture`)),

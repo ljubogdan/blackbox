@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Sabotage } from '../shared/types';
+import type { BuildOptions } from '../server/data/scenarios';
 import { assembleTeam } from '../server/agents/team';
 import { buildCase } from '../server/data/scenarios';
 import { GuardedRunner } from '../server/model/guard';
@@ -50,6 +51,7 @@ test('a Stripe error comes back with its message', async () => {
 const calls: string[] = [];
 let n = 0;
 const recording: PaymentGateway = {
+  run: 'test',
   authorise: async (ref, cents) => (calls.push(`authorise ${ref} ${cents}`), `pi_${++n}`),
   charge: async (ref, cents) => (calls.push(`charge ${ref} ${cents}`), `pi_${++n}`),
   capture: async (id) => void calls.push(`capture ${id}`),
@@ -61,8 +63,8 @@ const team = assembleTeam(recording);
 const rng = new Rng(11);
 let caseN = 0;
 
-async function run(sabotage: Sabotage, stage: 'hold' | 'dispute') {
-  const { caseFile } = buildCase(rng, ++caseN, sabotage, caseN, Date.now(), { stage });
+async function run(sabotage: Sabotage, stage: 'hold' | 'dispute', opts: BuildOptions = {}) {
+  const { caseFile } = buildCase(rng, ++caseN, sabotage, caseN, Date.now(), { stage, ...opts });
   const s = state();
   for (const e of caseFile.evidence) s.evidence.set(e.id, e);
   s.cases.set(caseFile.id, caseFile);
@@ -101,4 +103,12 @@ test('a denied claim keeps the charge and refunds nothing', async () => {
   assert.equal(c.status, 'ruled');
   assert.equal(mine.filter((l) => l.startsWith('refund')).length, 0);
   assert.equal(c.payment!.status, 'charged');
+});
+
+test('a known attack blocked on arrival is cancelled, though its case closes before the payment opens', async () => {
+  const source = 'reviews-widget.example';
+  await run('injection', 'hold', { source }); // the network learns the attack here
+  const { c, cents, mine } = await run('injection', 'hold', { source });
+  assert.equal(c.arbiter.ruling?.reason_code, 'KNOWN_ATTACK');
+  assert.deepEqual(mine, [`authorise ${c.id} ${cents}`, `cancel ${c.payment!.id}`]);
 });

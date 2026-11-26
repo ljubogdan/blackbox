@@ -633,12 +633,18 @@ function createLedger(): Agent {
 function createPayments(gateway: PaymentGateway): Agent {
   const payments = new Map<string, Promise<string | null>>(); // case id -> its Stripe payment id
   const finished = new Set<string>();
+  // A case can close before its payment opens: a known attack is blocked, or a clean payment let
+  // through, within the same event that opened it. Such a close is remembered and acted on as
+  // soon as the payment exists.
+  const closed = new Set<string>();
   const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`;
   // The order record's total, the figure the Ledger computes from.
   const centsOf = (c: CaseFile) => Math.round(Number(c.evidence.find((e) => e.kind === 'ORD')!.data.total) * 100);
   const failed = (c: CaseFile, what: string, e: unknown) => {
+    const why = e instanceof Error ? e.message : String(e);
     if (c.payment) c.payment.status = 'failed';
-    note(c, 'Payments', `Stripe ${what} failed: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(`[stripe] ${c.id}: ${what} failed: ${why}`); // on the console too, so a failing run cannot look clean
+    note(c, 'Payments', `Stripe ${what} failed: ${why}`);
     pushCase(c);
   };
 
@@ -663,7 +669,9 @@ function createPayments(gateway: PaymentGateway): Agent {
     processor: {
       apply(ctx) {
         const c = state().cases.get(payloadOf<{ caseId: string }>(ctx).caseId);
-        if (c && !payments.has(c.id)) open(c, ctx.event.type === 'purchase.pending' ? 'authorise' : 'charge');
+        if (!c || payments.has(c.id)) return;
+        open(c, ctx.event.type === 'purchase.pending' ? 'authorise' : 'charge');
+        if (closed.has(c.id)) settleIn(c);
       },
     },
   };
@@ -673,43 +681,50 @@ function createPayments(gateway: PaymentGateway): Agent {
     processor: {
       apply(ctx) {
         const c = state().cases.get(payloadOf<{ caseId: string }>(ctx).caseId);
-        const pending = c && payments.get(c.id);
-        if (!c || !pending || finished.has(c.id)) return;
-        finished.add(c.id);
-        void pending.then(async (id) => {
-          if (!id || !c.payment) return;
-          const p = c.payment;
-          try {
-            if (c.status === 'released' && p.status === 'authorised') {
-              await gateway.capture(id);
-              p.status = 'captured';
-              note(c, 'Payments', `Stripe captured ${eur(centsOf(c))}: released to the merchant`);
-            } else if (c.status === 'blocked' && p.status === 'authorised') {
-              await gateway.cancel(id);
-              p.status = 'cancelled';
-              note(c, 'Payments', 'Stripe cancelled the authorisation: blocked, nothing was charged');
-            } else if (c.status === 'ruled' && p.status === 'charged') {
-              const refund = c.settlement?.find((l) => l.party === 'customer' && l.label === 'Refund to customer');
-              const cents = Math.round((refund?.amount ?? 0) * 100);
-              if (cents <= 0) {
-                note(c, 'Payments', 'no refund: the claim was denied, so the Stripe charge stands');
-              } else {
-                p.refund = await gateway.refund(id, cents);
-                p.status = 'refunded';
-                note(c, 'Payments', `Stripe refunded ${eur(cents)}, the Ledger's figure: ${p.refund}`);
-              }
-            } else if (p.status === 'authorised') {
-              p.status = 'left_authorised';
-              note(c, 'Payments', 'left the Stripe authorisation in place for manual review');
-            }
-            pushCase(c);
-          } catch (e) {
-            failed(c, 'settlement', e);
-          }
-        });
+        if (!c) return;
+        closed.add(c.id);
+        settleIn(c);
       },
     },
   };
+
+  // Settle the case's payment in Stripe the way the case closed: once, after the payment opened.
+  function settleIn(c: CaseFile) {
+    const pending = payments.get(c.id);
+    if (!pending || finished.has(c.id)) return;
+    finished.add(c.id);
+    void pending.then(async (id) => {
+      if (!id || !c.payment) return;
+      const p = c.payment;
+      try {
+        if (c.status === 'released' && p.status === 'authorised') {
+          await gateway.capture(id);
+          p.status = 'captured';
+          note(c, 'Payments', `Stripe captured ${eur(centsOf(c))}: released to the merchant`);
+        } else if (c.status === 'blocked' && p.status === 'authorised') {
+          await gateway.cancel(id);
+          p.status = 'cancelled';
+          note(c, 'Payments', 'Stripe cancelled the authorisation: blocked, nothing was charged');
+        } else if (c.status === 'ruled' && p.status === 'charged') {
+          const refund = c.settlement?.find((l) => l.party === 'customer' && l.label === 'Refund to customer');
+          const cents = Math.round((refund?.amount ?? 0) * 100);
+          if (cents <= 0) {
+            note(c, 'Payments', 'no refund: the claim was denied, so the Stripe charge stands');
+          } else {
+            p.refund = await gateway.refund(id, cents);
+            p.status = 'refunded';
+            note(c, 'Payments', `Stripe refunded ${eur(cents)}, the Ledger's figure: ${p.refund}`);
+          }
+        } else if (p.status === 'authorised') {
+          p.status = 'left_authorised';
+          note(c, 'Payments', 'left the Stripe authorisation in place for manual review');
+        }
+        pushCase(c);
+      } catch (e) {
+        failed(c, 'settlement', e);
+      }
+    });
+  }
   return codeParticipant('Payments', [onOpened, onClosed]);
 }
 

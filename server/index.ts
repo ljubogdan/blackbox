@@ -45,7 +45,8 @@ const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, conf
 
 initializeRuntime({ state: new BlackboxState(), inferenceRunnerConfig: { runner } });
 if (config.stripeKey && !isTestKey(config.stripeKey)) console.error('STRIPE_SECRET_KEY is not a test key, so Stripe stays off: Blackbox never moves real money.');
-const team = assembleTeam(config.stripeKey && isTestKey(config.stripeKey) ? stripeGateway(config.stripeKey) : undefined);
+const gateway = config.stripeKey && isTestKey(config.stripeKey) ? stripeGateway(config.stripeKey) : undefined;
+const team = assembleTeam(gateway);
 const rng = new Rng(config.seed);
 
 const info: EngineInfo = {
@@ -275,7 +276,7 @@ wss.on('connection', (ws) => {
 server.listen(config.port, () => {
   console.log(`Blackbox engine on http://localhost:${config.port}  ·  mode: ${info.mode}  ·  model: ${info.model}`);
   console.log(`Participants: ${team.roster.map((p) => `${p.name} (${p.kind})`).join(', ')}`);
-  if (team.roster.some((p) => p.name === 'Payments')) console.log('Stripe test mode: every case\'s money is mirrored at https://dashboard.stripe.com/test/payments');
+  if (gateway) console.log(`Stripe test mode, run ${gateway.run}: every case's money is mirrored at https://dashboard.stripe.com/test/payments`);
   if (!config.stream) return;
   tickPurchase();
   setTimeout(() => openCase('injection', { stage: 'hold' }), 1800);
