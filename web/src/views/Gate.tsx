@@ -241,7 +241,7 @@ function Threads() {
 
   useFrame(() => {
     const now = performance.now();
-    const { arcs, cases } = useStore.getState();
+    const { arcs, cases, hover } = useStore.getState();
 
     for (const a of arcs) {
       if (live.current.has(a.id) || now - a.seenAt > 9000) continue;
@@ -287,6 +287,8 @@ function Threads() {
         marker.quaternion.copy(camera.quaternion);
         th.markerMaterial!.color.copy(HELD);
         th.markerMaterial!.opacity = 1;
+        const pointed = hover === th.caseId;
+        marker.scale.setScalar(pointed ? 1.6 : 1);
         th.pulse!.scale.setScalar(1 + beat * 1.5);
         (th.pulse!.material as THREE.MeshBasicMaterial).opacity = arrived && !closed ? 0.7 * (1 - beat) : 0;
         if (th.tether) (th.tether.material as THREE.LineBasicMaterial).opacity = arrived && !closed ? 0.22 : 0;
@@ -427,6 +429,12 @@ function Filed({ c }: { c: CaseFile }) {
         useStore.getState().set({ hover: null });
       }}
     >
+      {hovered && (
+        <mesh position={[0, -position.y / 2 / 1.7, 0]} scale={1 / 1.7}>
+          <boxGeometry args={[0.012, position.y, 0.012]} />
+          <meshBasicMaterial color={PARTY_COLOR[party]} transparent opacity={0.7} toneMapped={false} />
+        </mesh>
+      )}
       {/* blocked before settlement keeps the diamond; a ruling after settlement is round */}
       {c.status === 'blocked' ? <octahedronGeometry args={[0.075, 0]} /> : <sphereGeometry args={[0.058, 16, 16]} />}
       <meshBasicMaterial color={PARTY_COLOR[party]} toneMapped={false} />
@@ -510,7 +518,6 @@ const fromSideOrTop = shows(['flow', 'liability']);
 
 function Box() {
   const post = '#e9e9e6';
-  useAnchor('box', (out) => (out.set(0, BOX_H, -ZW), true));
   TICKS.forEach((v, i) => useAnchor(`tick:${i}`, (out) => (out.set(BX, yOf(v), ZW), fromSideOrFront()))); // eslint-disable-line react-hooks/rules-of-hooks
   PROVIDER_NAMES.forEach((name, i) => useAnchor(`lane:${i}`, (out) => (out.set(useStore.getState().lens === 'agents' ? -BX - 0.25 : -BX - 2.4, 0, laneZ(name)), true))); // eslint-disable-line react-hooks/rules-of-hooks
   BAYS.forEach((_, i) => useAnchor(`bay:${i}`, (out) => (out.set(bayX(i), BOX_H, ZW), fromSideOrTop()))); // eslint-disable-line react-hooks/rules-of-hooks
@@ -683,9 +690,6 @@ function BoxLabels() {
   const lens = useStore((s) => s.lens);
   return (
     <LabelLayer>
-      <Label anchor="box" className="gate-text title">
-        Blackbox
-      </Label>
       {TICKS.map((v, i) => (
         <Label key={v} anchor={`tick:${i}`} className="gate-text tick">
           {eur(v, 0)}

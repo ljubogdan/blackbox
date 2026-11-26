@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { eur, useStore, waitingCases } from '../store';
 import { endTour, startTour } from './Tour';
 
@@ -13,7 +14,32 @@ const ICON = {
   soundOff: 'M2.5 6.2h2.3L8 3.5v9L4.8 9.8H2.5zM10.8 6.4l3 3.2M13.8 6.4l-3 3.2',
 };
 
-function Metric({ label, value, note }: { label: string; value: string; note?: string }) {
+// A figure that glides to its new value, so a change reads as movement, not a flicker.
+function useGlide(target: number): number {
+  const [shown, setShown] = useState(target);
+  const from = useRef(target);
+  useEffect(() => {
+    const start = performance.now();
+    const a = from.current;
+    let raf = 0;
+    const step = () => {
+      const k = Math.min(1, (performance.now() - start) / 600);
+      const v = a + (target - a) * (1 - Math.pow(1 - k, 3));
+      from.current = v;
+      setShown(v);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  return shown;
+}
+
+function Money({ value }: { value: number }) {
+  return <>{eur(Math.round(useGlide(value)), 0)}</>;
+}
+
+function Metric({ label, value, note }: { label: string; value: React.ReactNode; note?: string }) {
   return (
     <div className="metric">
       <label>{label}</label>
@@ -60,9 +86,9 @@ export function TopBar() {
         )}
       </nav>
       <div className="metrics">
-        <Metric label="Guaranteed" value={stats ? eur(stats.gmv, 0) : '—'} note={stats ? `${stats.purchases.toLocaleString('en-GB')} purchases` : undefined} />
+        <Metric label="Guaranteed" value={stats ? <Money value={stats.gmv} /> : '—'} note={stats ? `${stats.purchases.toLocaleString('en-GB')} purchases` : undefined} />
         <Metric label="Held in the box" value={String(heldNow)} note="right now" />
-        <Metric label="Stopped before settlement" value={stats ? eur(stats.prevented, 0) : '—'} note={stats ? `${stats.blocked} blocked` : undefined} />
+        <Metric label="Stopped before settlement" value={stats ? <Money value={stats.prevented} /> : '—'} note={stats ? `${stats.blocked} blocked` : undefined} />
       </div>
       <div className="controls">
         {waiting.length > 0 && (

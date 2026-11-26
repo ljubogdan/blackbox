@@ -13,9 +13,11 @@ const LENSES: { id: Lens; name: string; text: string }[] = [
 
 function CaseRow({ c }: { c: CaseFile }) {
   const open = useStore((s) => s.open);
+  const hot = useStore((s) => s.hover === c.id);
   const ruling = c.arbiter.ruling;
+  const point = (id: string | null) => useStore.getState().set({ hover: id });
   return (
-    <button className={`case-row ${c.status}`} onClick={() => open(c.id)}>
+    <button className={`case-row ${c.status} ${hot ? 'hot' : ''}`} onClick={() => open(c.id)} onMouseEnter={() => point(c.id)} onMouseLeave={() => point(null)} onFocus={() => point(c.id)} onBlur={() => point(null)}>
       <div className="l1">
         <span className="item">{c.purchase.item}</span>
         <span className="amount">{eur(c.purchase.total)}</span>

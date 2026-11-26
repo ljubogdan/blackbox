@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { connect, useStore } from './store';
 import { ApprovalBanner, CaseInfo, Inspector, Investigators, ReplayLens, Verdict } from './ui/CasePanels';
 import { Engine } from './ui/Engine';
@@ -20,6 +20,12 @@ export function App() {
   const entering = useStore((s) => !!s.entering);
 
   useEffect(() => connect(), []);
+  // The first seconds after loading: the box and the question alone, then the rest arrives.
+  const [opening, setOpening] = useState(true);
+  useEffect(() => {
+    const id = setTimeout(() => setOpening(false), 4200);
+    return () => clearTimeout(id);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && (useStore.getState().builder ? useStore.getState().set({ builder: false }) : back());
     window.addEventListener('keydown', onKey);
@@ -28,7 +34,7 @@ export function App() {
 
   const inCase = view === 'case' && !!c;
   return (
-    <div className={`app ${engine ? 'engine-open' : ''} ${entering ? 'entering' : ''}`}>
+    <div className={`app ${engine ? 'engine-open' : ''} ${entering ? 'entering' : ''} ${opening ? 'opening' : ''}`}>
       <TopBar />
       {inCase ? (
         <main className="case-view" key={selected}>
