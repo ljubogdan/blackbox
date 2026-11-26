@@ -52,7 +52,6 @@ interface Store {
   pageMode: 'human' | 'agent';
   awaiting: string | null; // nonce of a case we asked for and want to open when it exists
   lastCreated: { nonce: string; caseId: string } | null;
-  tour: { caption: string; step: number; of: number } | null;
   request: (msg: ClientMsg & { nonce: string }, open?: boolean) => void;
   set: (patch: Partial<Store>) => void;
   open: (caseId: string) => void;
@@ -89,7 +88,6 @@ export const useStore = create<Store>((set, get) => ({
   pageMode: 'human',
   awaiting: null,
   lastCreated: null,
-  tour: null,
   request: (msg, open = true) => {
     if (open) set({ awaiting: msg.nonce });
     get().send(msg);

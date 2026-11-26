@@ -1973,57 +1973,6 @@ blockquote.held label {
   font-size: 14px;
 }
 
-/* ───────── guided tour ───────── */
-
-.tour {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--bottom) + 26px);
-  transform: translateX(-50%);
-  z-index: 55;
-  width: min(640px, calc(100vw - 40px));
-  padding: 16px 22px 13px;
-  border-radius: 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--line-strong);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
-  text-align: center;
-}
-.tour.case {
-  top: calc(var(--top) + 62px);
-  bottom: auto;
-}
-.tour p {
-  font-family: var(--display);
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: -0.018em;
-  line-height: 1.35;
-  animation: rise 0.5s ease both;
-}
-.tour .dots {
-  display: flex;
-  justify-content: center;
-  gap: 5px;
-  margin-bottom: 11px;
-}
-.tour .dots i {
-  width: 18px;
-  height: 2px;
-  background: var(--line-strong);
-}
-.tour .dots i.on {
-  background: var(--text);
-}
-.tour button {
-  margin-top: 9px;
-  font-size: 12px;
-  color: var(--faint);
-}
-.tour button:hover {
-  color: var(--text);
-}
-
 /* ───────── narrower screens ───────── */
 
 @media (min-width: 1300px) {

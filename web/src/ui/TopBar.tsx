@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { eur, useStore, waitingCases } from '../store';
-import { endTour, startTour } from './Tour';
 
 const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -57,7 +56,6 @@ export function TopBar() {
   const setPaused = useStore((s) => s.setPaused);
   const back = useStore((s) => s.back);
   const sound = useStore((s) => s.sound);
-  const tour = useStore((s) => s.tour);
   const set = useStore((s) => s.set);
   const cases = useStore((s) => s.cases);
   const open = useStore((s) => s.open);
@@ -93,9 +91,6 @@ export function TopBar() {
             {waiting.length === 1 ? '1 ruling is waiting for you' : `${waiting.length} rulings are waiting for you`}
           </button>
         )}
-        <button className="btn" onClick={() => (tour ? endTour() : void startTour())}>
-          {tour ? 'Stop tour' : 'Guided tour'}
-        </button>
         <button className="btn primary" onClick={() => set({ builder: true })}>
           Simulate
         </button>

@@ -5,7 +5,6 @@ import { Engine } from './ui/Engine';
 import { LivePanels } from './ui/LivePanels';
 import { Builder } from './ui/Builder';
 import { TopBar } from './ui/TopBar';
-import { TourCaption } from './ui/Tour';
 import { CaseScene } from './views/CaseScene';
 import { GateScene } from './views/Gate';
 
@@ -58,7 +57,6 @@ export function App() {
         </>
       )}
       <Engine caseId={inCase ? c!.id : null} />
-      <TourCaption />
       {builder && <Builder />}
       {!connected && <div className="offline">Connecting to the engine…</div>}
     </div>
