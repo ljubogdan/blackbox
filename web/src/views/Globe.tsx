@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { feature } from 'topojson-client';
 import type { Topology } from 'topojson-specification';
-import land from 'world-atlas/land-110m.json';
+import land from 'world-atlas/land-50m.json';
 import { MERCHANTS } from '../../../shared/types';
 import { BG, BREACH, DIVE_MS, eur, INK, reducedMotion, useStore } from '../store';
 import { Label, LabelLayer, Projector, useAnchor } from './labels';
@@ -51,20 +51,91 @@ const hitAt = new Float64Array(N).fill(-1e9);
 
 // The land, painted onto a world map (longitude across, latitude down) with softened coasts, and
 // wrapped onto the planet by the ocean shader.
-// Drawn once per page and kept: the globe is mounted again every time a case is closed.
-let landCanvas: HTMLCanvasElement | null = null;
+// The land as a signed distance field: each texel holds how far it is from the nearest coast, not
+// whether it is land. Sampled between texels that distance varies smoothly, so the coast stays a
+// clean curve however close the camera comes, where a picture of the land would break into pixels.
+// Worked out once per page and kept: the globe is mounted again every time a case is closed.
+const FIELD_W = 2048;
+const FIELD_H = 1024;
+const SPREAD = 10; // texels of distance the field encodes on each side of the coast
+let landField: Uint8Array | null = null;
 
-function landMap(): THREE.CanvasTexture {
-  landCanvas ??= paintLand();
-  const map = new THREE.CanvasTexture(landCanvas);
+function landMap(): THREE.DataTexture {
+  landField ??= distanceField(paintLand());
+  const map = new THREE.DataTexture(landField, FIELD_W, FIELD_H, THREE.RedFormat, THREE.UnsignedByteType);
+  map.magFilter = THREE.LinearFilter;
+  map.minFilter = THREE.LinearMipmapLinearFilter;
+  map.generateMipmaps = true;
   map.anisotropy = 8;
-  map.colorSpace = THREE.NoColorSpace; // a mask, not a colour
+  map.colorSpace = THREE.NoColorSpace;
+  map.needsUpdate = true;
   return map;
 }
 
+// Squared distance to the nearest set cell along one line (Felzenszwalb and Huttenlocher).
+function edt1d(f: Float64Array, n: number, d: Float64Array, v: Int32Array, z: Float64Array) {
+  let k = 0;
+  v[0] = 0;
+  z[0] = -Infinity;
+  z[1] = Infinity;
+  for (let q = 1; q < n; q++) {
+    let s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    while (s <= z[k]) {
+      k--;
+      s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    }
+    k++;
+    v[k] = q;
+    z[k] = s;
+    z[k + 1] = Infinity;
+  }
+  k = 0;
+  for (let q = 0; q < n; q++) {
+    while (z[k + 1] < q) k++;
+    d[q] = (q - v[k]) * (q - v[k]) + f[v[k]];
+  }
+}
+
+// Euclidean distance from every cell to the nearest cell where `seed` is true.
+function edt(seed: (i: number) => boolean, w: number, h: number): Float64Array {
+  const grid = new Float64Array(w * h);
+  for (let i = 0; i < w * h; i++) grid[i] = seed(i) ? 0 : 1e20;
+  const n = Math.max(w, h);
+  const f = new Float64Array(n);
+  const d = new Float64Array(n);
+  const v = new Int32Array(n);
+  const z = new Float64Array(n + 1);
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) f[y] = grid[y * w + x];
+    edt1d(f, h, d, v, z);
+    for (let y = 0; y < h; y++) grid[y * w + x] = d[y];
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) f[x] = grid[y * w + x];
+    edt1d(f, w, d, v, z);
+    for (let x = 0; x < w; x++) grid[y * w + x] = Math.sqrt(d[x]);
+  }
+  return grid;
+}
+
+// From the painted land to a field: 0.5 on the coast, rising inland, falling out to sea. Rows run
+// from north to south.
+function distanceField(canvas: HTMLCanvasElement): Uint8Array {
+  const px = canvas.getContext('2d')!.getImageData(0, 0, FIELD_W, FIELD_H).data;
+  const isLand = (i: number) => px[i * 4] >= 128;
+  const toLand = edt(isLand, FIELD_W, FIELD_H);
+  const toSea = edt((i) => !isLand(i), FIELD_W, FIELD_H);
+  const out = new Uint8Array(FIELD_W * FIELD_H);
+  for (let i = 0; i < out.length; i++) {
+    const signed = isLand(i) ? toSea[i] - 0.5 : -(toLand[i] - 0.5);
+    out[i] = Math.round(Math.min(1, Math.max(0, 0.5 + signed / (2 * SPREAD))) * 255);
+  }
+  return out;
+}
+
 function paintLand(): HTMLCanvasElement {
-  const W = 2048;
-  const H = 1024;
+  const W = FIELD_W;
+  const H = FIELD_H;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -95,15 +166,7 @@ function paintLand(): HTMLCanvasElement {
         ctx.fill('evenodd');
       }
   }
-  // Soften the coasts in one pass over the finished map; blurring each polygon as it is drawn costs
-  // a blur of the whole canvas per polygon.
-  const soft = document.createElement('canvas');
-  soft.width = W;
-  soft.height = H;
-  const sctx = soft.getContext('2d')!;
-  sctx.filter = 'blur(1.6px)';
-  sctx.drawImage(canvas, 0, 0);
-  return soft;
+  return canvas;
 }
 
 // One key light for the planet, kept up and to the left of wherever the camera is, so the globe
@@ -132,11 +195,23 @@ const oceanShader = {
       float edge = pow(clamp(1.0 - dot(n, v), 0.0, 1.0), 3.0);
       // where on the map this point is: the inverse of onGlobe()
       float theta = atan(n.z, -n.x);
-      vec2 uv = vec2(fract(theta / (2.0 * PI)), 1.0 - acos(clamp(n.y, -1.0, 1.0)) / PI);
-      float land = texture2D(uLand, uv).r;
+      float u = theta / (2.0 * PI);
+      vec2 uv = vec2(fract(u), acos(clamp(n.y, -1.0, 1.0)) / PI);
+      // The map wraps at the date line, where fract() jumps from 1 to 0; derivatives taken across the
+      // jump would pick the coarsest level of detail and draw a seam. Take them from a copy of u that
+      // jumps half a world away instead, whichever is smaller.
+      float ua = fract(u);
+      float ub = fract(u + 0.5) - 0.5;
+      vec2 gx = vec2(abs(dFdx(ua)) < abs(dFdx(ub)) ? dFdx(ua) : dFdx(ub), dFdx(uv.y));
+      vec2 gy = vec2(abs(dFdy(ua)) < abs(dFdy(ub)) ? dFdy(ua) : dFdy(ub), dFdy(uv.y));
+      float field = textureGrad(uLand, uv, gx, gy).r;
+      float w = fwidth(field) * 0.75 + 1e-4; // about one screen pixel, so the coast is sharp at any zoom
+      float land = smoothstep(0.5 - w, 0.5 + w, field);
+      float coast = 1.0 - smoothstep(0.0, w * 2.5, abs(field - 0.5)); // a fine line along the shore
       vec3 sea = mix(vec3(0.01, 0.013, 0.024), vec3(0.03, 0.05, 0.09), day);
       vec3 ground = mix(vec3(0.07, 0.08, 0.1), vec3(0.42, 0.44, 0.48), smoothstep(-0.1, 0.9, dot(n, uLight)));
       vec3 col = mix(sea, ground, land);
+      col += vec3(0.55, 0.6, 0.7) * coast * 0.18 * (0.3 + 0.7 * day);
       col += vec3(0.32, 0.52, 0.95) * edge * (0.03 + 0.12 * day);
       float glint = pow(clamp(dot(n, normalize(uLight + v)), 0.0, 1.0), 160.0);
       col += vec3(0.75, 0.85, 1.0) * glint * 0.22 * (1.0 - land); // only the water shines

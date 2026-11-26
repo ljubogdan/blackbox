@@ -3,7 +3,7 @@ import type { CaseFile, CitationCheck, EvidenceRecord, Role } from '../../../sha
 import { PARTIES, PARTY_NAME, ROLE_NAME, ROLE_PARTY, ROLES } from '../../../shared/types';
 import { useEffect, useState } from 'react';
 import { downloadPack } from '../pack';
-import { caseBox, dockOpen, eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore, type Lens } from '../store';
+import { dockOpen, eur, nonce, PARTY_COLOR, ROLE_COLOR, topParty, useStore } from '../store';
 import { CaseState } from './State';
 
 const QUESTION: Record<Role, string> = {
@@ -398,12 +398,11 @@ function WhatIf({ c }: { c: CaseFile }) {
 
 export function CaseInfo({ c }: { c: CaseFile }) {
   const back = useStore((s) => s.back);
-  const backTo = useStore((s) => caseBox(s) ?? 'Network');
   const p = c.purchase;
   return (
     <aside className="case-info">
       <button className="backlink" onClick={back}>
-        ← {backTo}
+        ← Network
       </button>
       <div className="case-title">
         <CaseState c={c} />
@@ -454,27 +453,12 @@ export function Investigators({ c }: { c: CaseFile }) {
   );
 }
 
-// The corridor reads differently from each side.
-const LENSES: { id: Lens; name: string }[] = [
-  { id: 'flow', name: 'Side' },
-  { id: 'agents', name: 'Front' },
-  { id: 'liability', name: 'Top' },
-];
-
-// The controls for looking at the replay, in one row: which side to look from, and the team's cards.
+// Under the case: the team's cards, shown or put away.
 export function ReplayLens() {
-  const lens = useStore((s) => s.replayLens);
   const set = useStore((s) => s.set);
   const dock = useStore(dockOpen);
   return (
     <div className="replay-lens">
-      <div className="seg" role="tablist" aria-label="Which side of the corridor to look at">
-        {LENSES.map((l) => (
-          <button key={l.id} role="tab" aria-selected={lens === l.id} className={lens === l.id ? 'on' : ''} onClick={() => set({ replayGo: { to: l.id, n: Date.now() } })}>
-            {l.name}
-          </button>
-        ))}
-      </div>
       <button className="dock-toggle" onClick={() => set({ dockChoice: !dock })} aria-expanded={dock}>
         {dock ? 'Hide the team' : 'Show the team'}
       </button>

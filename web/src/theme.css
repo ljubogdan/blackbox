@@ -1,5 +1,7 @@
 /* Colour means outcome. Work in progress is neutral ink on graphite; only a
-   result (inside the mandate, outside it, or a party held liable) is coloured. */
+   result (inside the mandate,
+outside it,
+or a party held liable) is coloured. */
 :root {
   --bg: #09090b;
   --surface: #111113;
@@ -196,9 +198,7 @@ label {
 .app.opening .cases {
   animation: arrive-right 0.8s 2.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
-.app.opening .lens {
-  animation: arrive 0.8s 2.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
+
 .app.opening .engine {
   animation: fade 0.8s 3s ease both;
 }
@@ -212,12 +212,10 @@ label {
 }
 
 /* opening a case: the camera dives into the box and everything else gets out of the way */
-.lens,
 .cases,
 .stage.live .labels {
   transition: opacity 0.35s ease;
 }
-.app.entering .lens,
 .app.entering .cases,
 .app.entering .stage.live .labels {
   opacity: 0;
@@ -340,7 +338,6 @@ select option {
   letter-spacing: -0.02em;
 }
 
-
 .metrics {
   display: flex;
   margin-left: auto;
@@ -386,46 +383,6 @@ select option {
 
 /* ───────── live view ───────── */
 
-.lens {
-  position: absolute;
-  left: 32px;
-  bottom: calc(var(--bottom) + 20px);
-  width: min(430px, 40vw);
-  z-index: 10;
-}
-.seg {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 12px;
-  color: var(--faint);
-}
-.seg button {
-  padding: 4px 11px;
-  border-radius: 7px;
-  border: 1px solid transparent;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--muted);
-}
-.seg button:hover {
-  color: var(--text);
-}
-.seg button.on {
-  background: var(--surface-2);
-  border-color: var(--line-strong);
-  color: var(--text);
-}
-.seg span {
-  margin-left: 10px;
-}
-.lens p {
-  margin-top: 10px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--soft);
-  pointer-events: none;
-}
 .cases {
   position: absolute;
   right: 16px;
@@ -465,14 +422,7 @@ select option {
   color: var(--text);
   border-bottom-color: var(--text);
 }
-.badge {
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 20px;
-  background: var(--text);
-  color: #0a0a0b;
-}
+
 .cases .scroll {
   flex: 1;
   overflow-y: auto;
@@ -555,18 +505,6 @@ select option {
   color: var(--faint);
 }
 
-.minibar {
-  display: flex;
-  width: 56px;
-  height: 4px;
-  border-radius: 2px;
-  overflow: hidden;
-}
-.minibar i {
-  display: block;
-  height: 100%;
-}
-
 .board-note {
   color: var(--muted);
   font-size: 12.5px;
@@ -635,113 +573,6 @@ select option {
   pointer-events: auto;
 }
 
-.gate-text {
-  font-size: 11.5px;
-  color: var(--faint);
-  white-space: nowrap;
-  user-select: none;
-  pointer-events: none !important;
-}
-.gate-text.title {
-  transform: translate(-50%, -100%) translateY(-34px);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.gate-text.tick {
-  transform: translate(10px, -50%);
-}
-.gate-text.lane {
-  transform: translate(-100%, -50%) translateX(-8px);
-  color: var(--muted);
-}
-.gate-text.lane.agents {
-  transform: translate(-50%, 8px);
-  font-size: 11px;
-}
-.gate-text.lane.agents.odd {
-  transform: translate(-50%, 23px);
-}
-.gate-text.side {
-  transform: translate(-50%, 8px);
-}
-.gate-text.bay {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transform: translate(-50%, -100%) translateY(-6px);
-  font-size: 11px;
-  color: var(--muted);
-}
-.gate-text.bay.high {
-  transform: translate(-50%, -100%) translateY(-21px);
-}
-.gate-text.bay i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.gate-tag {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  transform: translate(-50%, -100%) translateY(-16px);
-  padding: 4px 9px;
-  border-radius: 7px;
-  background: var(--surface-2);
-  border: 1px solid var(--line-strong);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-  transition: border-color 0.15s, background 0.15s;
-}
-.gate-tag:hover {
-  background: var(--surface-3);
-  border-color: var(--text);
-}
-.gate-tag b {
-  font-weight: 600;
-}
-.gate-tag span {
-  color: var(--muted);
-}
-.gate-tag.tip {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  pointer-events: none !important;
-}
-.gate-tag.wait {
-  align-items: center;
-  transform: translate(-50%, -100%) translateY(-22px);
-  padding: 6px 7px 6px 11px;
-  background: var(--text);
-  border-color: var(--text);
-  color: #0a0a0b;
-  font-size: 12.5px;
-  z-index: 2;
-}
-.gate-tag.wait span {
-  color: #4a4a4f;
-}
-.gate-tag.wait em {
-  font-style: normal;
-  font-weight: 600;
-  margin-left: 4px;
-  padding: 2px 8px;
-  border-radius: 5px;
-  background: #0a0a0b;
-  color: var(--text);
-}
-.gate-tag.wait:hover {
-  background: #fff;
-  border-color: #fff;
-}
-
 /* ───────── case view ───────── */
 
 .case-view {
@@ -791,7 +622,6 @@ select option {
   z-index: 6;
   pointer-events: none;
 }
-.replay-lens .seg,
 .replay-lens .dock-toggle {
   pointer-events: auto;
 }
@@ -1063,11 +893,7 @@ blockquote.held label {
   color: var(--faint);
   font-size: 11px;
 }
-.hint {
-  margin-top: 10px;
-  color: var(--faint);
-  font-size: 12.5px;
-}
+
 .feed {
   margin-top: 20px;
   font-size: 12px;
@@ -1172,7 +998,8 @@ blockquote.held label {
   color: #fff;
   font-size: 11px;
 }
-/* Under "what the agent read", the lights go down and the planted text shows. */
+/* Under "what the agent read",
+the lights go down and the planted text shows. */
 .page.agent .browser {
   background: #130c2c;
   color: #c9bdf6;
@@ -1228,7 +1055,8 @@ blockquote.held label {
   background: var(--surface);
   transition: height 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-/* while the journey is drawn, the replay has the screen */
+/* while the journey is drawn,
+the replay has the screen */
 .dock.closed {
   height: 0;
   overflow: hidden;
@@ -1568,27 +1396,12 @@ blockquote.held label {
   color: var(--soft);
   white-space: nowrap;
 }
-.approval-banner .minibar {
-  width: 120px;
-  height: 6px;
-  border-radius: 3px;
-}
+
 .approval-banner .btn {
   flex: none;
   height: 36px;
   padding: 0 16px;
 }
-.tag3d.paused {
-  transform: translate(-50%, -100%);
-  padding: 2px 8px;
-  border-radius: 5px;
-  background: var(--text);
-  color: #0a0a0b;
-  font-size: 11.5px;
-  font-weight: 600;
-  pointer-events: none;
-}
-
 .rationale {
   margin-top: 11px;
   font-size: 14px;
@@ -1627,11 +1440,7 @@ blockquote.held label {
   min-width: 78px;
   text-align: right;
 }
-.truth {
-  margin-top: 9px;
-  font-size: 11.5px;
-  color: var(--faint);
-}
+
 .export {
   margin-top: 10px;
   font-size: 12.5px;
@@ -1645,80 +1454,7 @@ blockquote.held label {
 
 /* ───────── labels inside the replay ───────── */
 
-.tag3d {
-  font-family: var(--sans);
-  white-space: nowrap;
-  user-select: none;
-  transition: opacity 0.3s;
-}
-.tag3d .src {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--faint);
-}
-.tag3d.limit {
-  transform: translate(-100%, -50%) translateX(-10px);
-  color: var(--ok);
-  font-size: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-.tag3d.limit b {
-  font-weight: 600;
-}
-.tag3d.step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  font-size: 11.5px;
-  color: var(--muted);
-  background: var(--surface-2);
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  cursor: pointer;
-}
-.tag3d.step.up {
-  transform: translate(-50%, -50%) translateY(-23px);
-}
-.tag3d.step.down {
-  transform: translate(-50%, -50%) translateY(23px);
-}
-.tag3d.step b {
-  font-weight: 600;
-  color: var(--c);
-}
-.tag3d.step.out {
-  border-color: color-mix(in srgb, var(--breach) 70%, transparent);
-}
-.tag3d.step.sel,
-.tag3d.step:hover {
-  border-color: var(--text);
-  color: var(--text);
-}
-.tag3d.probe {
-  transform: translate(12px, -50%);
-  display: flex;
-  flex-direction: column;
-  padding-left: 0;
-  font-size: 11px;
-  line-height: 1.25;
-  color: var(--muted);
-  pointer-events: none;
-  text-shadow: 0 1px 6px var(--bg), 0 0 2px var(--bg);
-}
-.tag3d.probe b {
-  color: var(--c); /* the investigator's colour, now that the label has no side bar */
-  font-weight: 600;
-  font-size: 11.5px;
-}
-.tag3d.probe.rejected span {
-  color: var(--breach);
-}
-
-/* what the replay itself shows, before any agent has ruled */
-.replay-fact {
+/* what the replay itself shows {
   position: absolute;
   top: 14px;
   left: calc(292px + (100% - 292px) / 2);
@@ -1741,23 +1477,6 @@ blockquote.held label {
     opacity: 0;
     transform: translateX(-50%) translateY(-8px);
   }
-}
-.replay-fact b {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-weight: 600;
-  color: var(--text);
-}
-.replay-fact.breach {
-  border-color: color-mix(in srgb, var(--breach) 60%, transparent);
-}
-.replay-fact em {
-  font-style: normal;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  margin-left: 8px;
-  color: var(--faint);
 }
 
 /* ───────── engine strip ───────── */
@@ -1986,7 +1705,6 @@ blockquote.held label {
 /* ───────── narrower screens ───────── */
 
 @media (min-width: 1300px) {
-  .replay-fact,
   .approval-banner {
     left: calc(292px + (100% - 592px) / 2);
   }
@@ -2033,15 +1751,18 @@ blockquote.held label {
 }
 
 /* which pinned label wins when two overlap */
-.label:has(.gate-tag.wait) {
-  z-index: 2;
-}
-.label:has(.gate-tag.tip) {
-  z-index: 3;
-}
 
 /* figures that line up or change in place keep even widths */
-.metric b, .case-row .amount, .meta .amount, .inv .score b, .bar > div b, .settlement b, .brow .bps, .engine-toggle b, .tag3d.step b, .tag3d.limit b, .money, .whatif label b {
+.metric b,
+.case-row .amount,
+.meta .amount,
+.inv .score b,
+.bar > div b,
+.settlement b,
+.brow .bps,
+.engine-toggle b,
+.money,
+.whatif label b {
   font-variant-numeric: tabular-nums;
 }
 
@@ -2202,32 +1923,17 @@ blockquote.held.network button {
 }
 
 /* the sealed records under the replay */
-.tag3d.chain {
-  transform: translate(-50%, 0);
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
-  color: var(--faint);
-  pointer-events: none !important;
-}
-.tag3d.chain.sel {
-  color: var(--text);
-}
-.tag3d.chain.broken {
-  color: var(--breach);
-  font-family: var(--sans);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0;
-}
-
 
 /* ═════════════════════════ liquid glass ═════════════════════════
-   The scenes run under everything; bars, panels and cards float over them as glass. Each glass
-   surface blurs and saturates what is behind it, catches light along its top edge, and has a thin
+   The scenes run under everything; bars,
+panels and cards float over them as glass. Each glass
+   surface blurs and saturates what is behind it,
+catches light along its top edge,
+and has a thin
    rim that is brightest at its corners. Controls on glass are pills. */
 
-/* the scenes fill the window, under the bars */
+/* the scenes fill the window,
+under the bars */
 .stage.live {
   inset: 0;
 }
@@ -2252,10 +1958,8 @@ blockquote.held.network button {
 .dock,
 .modal,
 .approval-banner,
-.replay-fact,
 .offline,
 .dock-toggle,
-.seg,
 .tabs,
 .focus-chip {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.015) 38%, rgba(255, 255, 255, 0)), var(--glass);
@@ -2264,8 +1968,9 @@ blockquote.held.network button {
   border: 1px solid var(--glass-edge);
   box-shadow: var(--glass-shadow);
 }
-/* the rim: light caught at the corners, fading along the edges (not on panels that scroll themselves,
-   where it would scroll away with their content) */
+/* the rim: light caught at the corners,
+fading along the edges (not on panels that scroll themselves,
+where it would scroll away with their content) */
 .topbar::before,
 .engine::before,
 .cases::before,
@@ -2374,15 +2079,7 @@ blockquote.held.network button {
 .replay-lens {
   bottom: calc(var(--bottom) + var(--dock) + 14px);
 }
-.replay-fact {
-  top: var(--top);
-  border-radius: 999px;
-  padding: 8px 16px;
-}
-.replay-fact.breach {
-  border-color: color-mix(in srgb, var(--breach) 55%, transparent);
-  box-shadow: var(--glass-shadow);
-}
+
 .approval-banner {
   border-radius: 20px;
   border-color: rgba(255, 255, 255, 0.4);
@@ -2402,7 +2099,6 @@ blockquote.held.network button {
 }
 
 /* pills: segmented controls and tabs */
-.seg,
 .tabs {
   display: inline-flex;
   gap: 2px;
@@ -2416,7 +2112,6 @@ blockquote.held.network button {
   box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.25);
   border-color: rgba(255, 255, 255, 0.05);
 }
-.seg button,
 .tabs button {
   padding: 5px 13px;
   border: 0;
@@ -2430,15 +2125,12 @@ blockquote.held.network button {
     box-shadow 0.25s ease,
     transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
-.seg button:hover,
 .tabs button:hover {
   color: var(--text);
 }
-.seg button:active,
 .tabs button:active {
   transform: scale(0.95);
 }
-.seg button.on,
 .tabs button.on {
   background: var(--fill-strong);
   border: 0;
@@ -2569,7 +2261,8 @@ select option {
   padding: 8px 14px;
 }
 
-/* type: large and tight for titles, quiet secondary text */
+/* type: large and tight for titles,
+quiet secondary text */
 .case-info h2 {
   font-size: 23px;
   font-weight: 650;
@@ -2585,8 +2278,6 @@ h3 {
 }
 
 /* labels inside the scenes read on any background */
-.tag3d.step,
-.tag3d.probe,
 .net-note {
   background: rgba(22, 22, 27, 0.72);
   -webkit-backdrop-filter: blur(12px) saturate(160%);
@@ -2594,9 +2285,6 @@ h3 {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1) inset, 0 6px 16px rgba(0, 0, 0, 0.35);
-}
-.tag3d.step {
-  padding: 3px 10px;
 }
 .net-note.learned {
   background: rgba(255, 255, 255, 0.9);
@@ -2643,18 +2331,16 @@ h3 {
 /* no blur where the browser cannot do it: plain, darker glass */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .topbar,
-  .engine,
-  .cases,
-  .case-info,
-  .inspector,
-  .dock,
-  .modal,
-  .approval-banner,
-  .replay-fact {
+.engine,
+.cases,
+.case-info,
+.inspector,
+.dock,
+.modal,
+.approval-banner {
     background: var(--glass-strong);
   }
 }
-
 
 /* ═════════════════════════ the finer points ═════════════════════════ */
 
@@ -2693,7 +2379,6 @@ label,
   font: var(--t-callout);
 }
 .case-row .l3,
-.tag3d.step,
 .dock-toggle {
   font: var(--t-footnote);
 }
@@ -2707,14 +2392,13 @@ label,
   border-color: var(--ghost);
 }
 
-/* 3. figures keep their width, so a changing amount never shifts the text around it */
+/* 3. figures keep their width,
+so a changing amount never shifts the text around it */
 .metric b,
 .amount,
 .money,
 .case-row .amount,
-.tag3d b,
 .net-note,
-.replay-fact span,
 .tamper input,
 .inv .score,
 .settlement,
@@ -2741,7 +2425,8 @@ select,
   border-radius: 12px;
 }
 
-/* 5. materials: the bars and sheets are thickest, small pills thinnest */
+/* 5. materials: the bars and sheets are thickest,
+small pills thinnest */
 .topbar,
 .engine,
 .modal {
@@ -2749,9 +2434,7 @@ select,
   -webkit-backdrop-filter: var(--blur-thick);
   backdrop-filter: var(--blur-thick);
 }
-.replay-fact,
 .dock-toggle,
-.seg,
 .focus-chip,
 .offline {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)), var(--glass-thin);
@@ -2798,10 +2481,10 @@ select,
   }
 }
 
-/* 9. motion: every press, hover and toggle uses the same spring */
+/* 9. motion: every press,
+hover and toggle uses the same spring */
 .btn,
 .icon,
-.seg button,
 .tabs button,
 .case-row,
 .options button,
@@ -2815,7 +2498,8 @@ select,
   transform: scale(0.95);
 }
 
-/* 10. focus: a soft ring that follows the shape of the control, for the keyboard only */
+/* 10. focus: a soft ring that follows the shape of the control,
+for the keyboard only */
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,
@@ -2828,7 +2512,8 @@ select:focus {
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-/* 14. loading: the shape of what is coming, instead of a sentence */
+/* 14. loading: the shape of what is coming,
+instead of a sentence */
 .case-row.skeleton {
   pointer-events: none;
   animation: none;
@@ -2872,14 +2557,12 @@ select:focus {
 .icon,
 .chip,
 .btn.small,
-.seg button,
 .tabs button {
   position: relative;
 }
 .icon::after,
 .chip::after,
 .btn.small::after,
-.seg button::after,
 .tabs button::after {
   content: '';
   position: absolute;
@@ -2889,8 +2572,8 @@ select:focus {
 /* 11. less motion, when asked for */
 @media (prefers-reduced-motion: reduce) {
   *,
-  *::before,
-  *::after {
+*::before,
+*::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -2904,21 +2587,17 @@ select:focus {
 /* 12. less transparency, when asked for: solid materials */
 @media (prefers-reduced-transparency: reduce) {
   .topbar,
-  .engine,
-  .modal,
-  .cases,
-  .case-info,
-  .inspector,
-  .dock,
-  .approval-banner,
-  .replay-fact,
-  .dock-toggle,
-  .seg,
-  .focus-chip,
-  .offline,
-  .tag3d.step,
-  .tag3d.probe,
-  .net-note {
+.engine,
+.modal,
+.cases,
+.case-info,
+.inspector,
+.dock,
+.approval-banner,
+.dock-toggle,
+.focus-chip,
+.offline,
+.net-note {
     background: #1d1d22;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -2936,7 +2615,8 @@ select:focus {
   }
 }
 
-/* the top bar: no separators between its groups, space does that */
+/* the top bar: no separators between its groups,
+space does that */
 .metric,
 .controls {
   border-left: 0;
@@ -2945,7 +2625,8 @@ select:focus {
   display: none;
 }
 
-/* where a 3D scene would be, when the browser cannot draw one */
+/* where a 3D scene would be,
+when the browser cannot draw one */
 .no-3d {
   position: absolute;
   inset: 0;
@@ -2972,4 +2653,229 @@ select:focus {
   margin-left: auto;
   font: var(--t-caption);
   color: var(--faint);
+}
+
+/* what the agent did,
+in order */
+.journey {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  list-style: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)), var(--glass-thin);
+  -webkit-backdrop-filter: var(--blur-thin);
+  backdrop-filter: var(--blur-thin);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+  pointer-events: auto;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.journey li + li::before {
+  content: '›';
+  margin: 0 1px;
+  color: var(--ghost);
+}
+.journey li {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.journey button {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font: var(--t-footnote);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+.journey button b {
+  font-weight: 600;
+  color: var(--soft);
+}
+.journey button:hover,
+.journey button.on {
+  background: var(--fill-strong);
+  color: var(--text);
+}
+.journey button.breach {
+  color: var(--breach);
+}
+.journey button.breach b {
+  color: var(--breach);
+}
+
+/* ───────── the case: what was charged,
+and what it is made of ───────── */
+
+.case-view .stage {
+  background:
+    radial-gradient(1100px 520px at 50% 18%, rgba(120, 140, 190, 0.09), transparent 70%),
+    var(--bg);
+}
+.case-stage {
+  position: absolute;
+  top: var(--top);
+  left: calc(292px + 28px);
+  right: 28px;
+  bottom: calc(var(--bottom) + var(--dock) + 64px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 30px;
+  max-width: 820px;
+  margin: 0 auto;
+  transition: bottom 0.55s var(--spring-soft);
+}
+@media (min-width: 1300px) {
+  .case-stage {
+    right: calc(300px + 28px);
+  }
+}
+
+.case-stage .hero {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.case-stage .caption {
+  font: var(--t-footnote);
+  color: var(--faint);
+}
+.case-stage .total {
+  font: 650 56px/1 var(--display);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  animation: rise-in 0.6s var(--spring-soft) both;
+}
+.case-stage .fact {
+  margin-top: 8px;
+  font: var(--t-callout);
+  color: var(--muted);
+}
+.case-stage .fact b {
+  font-weight: 600;
+  color: var(--ok);
+}
+.case-stage .fact.breach b {
+  color: var(--breach);
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* one bar: the order,
+part by part,
+against the limit */
+.budget {
+  position: relative;
+  padding-top: 30px;
+}
+.budget .track {
+  position: relative;
+  height: 64px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.budget .part {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 82%, white), var(--c) 55%, color-mix(in srgb, var(--c) 82%, black));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform-origin: left center;
+  animation: fill 0.7s var(--spring-soft) both;
+  transition: opacity 0.2s ease;
+  cursor: pointer;
+}
+.budget .part.dim,
+.legend button.dim {
+  opacity: 0.35;
+}
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+}
+/* past the limit: struck through */
+.budget .past {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 16px;
+  border: 1.5px solid var(--breach);
+  background: repeating-linear-gradient(-45deg, rgba(255, 93, 71, 0.38) 0 5px, transparent 5px 11px);
+  pointer-events: none;
+  animation: fade 0.5s ease both;
+}
+/* the owner's limit,
+across the bar */
+.budget .limit {
+  position: absolute;
+  top: 6px;
+  bottom: -10px;
+  width: 0;
+  border-left: 2px solid var(--ok);
+  z-index: 2;
+  transition: left 0.35s var(--spring-soft);
+}
+.budget .limit.over {
+  border-left-color: var(--text);
+}
+.budget .limit span {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  font: var(--t-footnote);
+  font-variant-numeric: tabular-nums;
+  color: var(--soft);
+}
+
+/* the parts,
+named,
+with what each comes to */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: -12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.legend button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: var(--t-callout);
+  color: var(--muted);
+  transition: opacity 0.2s ease;
+}
+.legend button b {
+  font-weight: 600;
+  color: var(--c);
+  font-variant-numeric: tabular-nums;
+}
+.legend button:hover span {
+  color: var(--text);
+}
+
+.case-stage .journey {
+  align-self: flex-start;
 }

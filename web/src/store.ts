@@ -24,9 +24,6 @@ export interface Arc extends PurchaseLite {
   seenAt: number; // performance.now() when this browser first saw it
 }
 
-// The box means something different from each side: see views/Gate.tsx.
-export type Lens = 'flow' | 'agents' | 'liability';
-
 interface Store {
   connected: boolean;
   info: EngineInfo | null;
@@ -35,34 +32,22 @@ interface Store {
   arcs: Arc[];
   lanes: Lane[];
   skew: number; // server clock minus browser clock, ms
-  view: 'network' | 'live' | 'case';
+  view: 'network' | 'case';
   selected: string | null;
   inspect: { evidenceId: string; field?: string } | null;
   paused: boolean;
   sound: boolean;
   builder: boolean; // the simulator dialog
   engine: boolean; // the engine drawer at the bottom
-  lens: Lens; // which way the live view is being looked at
-  lensGo: { to: Lens; n: number } | null; // a request to turn the box to a side
-  hover: string | null; // the filed case under the pointer
-  stepHover: string | null; // the step of the replay under the pointer
   drawn: string | null; // the case whose journey the replay has finished drawing
   dockChoice: boolean | null; // the team's cards opened or closed by hand; null until the person chooses
   tamper: (TamperResult & { at: number }) | null; // what the checks made of an edit tried on the open case
-  replayLens: Lens; // the same, for the replay of one case
-  replayGo: { to: Lens; n: number } | null;
-  entering: { caseId: string; at: number } | null; // the camera is diving into the box towards this case
-  // Three levels: the network of every merchant's box, one merchant's box, one case.
-  merchant: string | null; // the box being looked at in the 'live' view
-  lastMerchant: string | null; // the box just left, so the network view can pull out of it
-  boxing: { merchant: string; at: number } | null; // the camera is flying from the network into this box
-  from: 'network' | 'live'; // where a case was opened from
+  entering: { caseId: string; at: number } | null; // the globe is flying into this case's city
   signatures: Record<string, Signature>;
   waves: { merchant: string; label: string; at: number }[]; // signatures learned while this page was open
   catches: { caseId: string; merchant: string; source: string; total: number; at: number }[]; // payments the network stopped
   focus: string | null; // the merchant whose city the globe has turned to; the case list shows only its cases
   focusCity: (merchant: string | null) => void;
-  enterBox: (merchant: string) => void;
   toNetwork: () => void;
   limitPreview: number | null; // the limit being tried on the what-if slider
   pageMode: 'human' | 'agent';
@@ -79,11 +64,6 @@ interface Store {
 
 let socket: WebSocket | null = null;
 
-// The box an open case goes back to. A case opened from inside one box can belong to another
-// (a simulation, a ruling waiting for approval), so its own merchant wins over the box last looked at.
-export const caseBox = (s: Store): string | null =>
-  s.view === 'case' && s.from === 'live' ? (s.selected && s.cases[s.selected]?.purchase.merchant.name) || s.merchant : null;
-
 export const useStore = create<Store>((set, get) => ({
   connected: false,
   info: null,
@@ -99,25 +79,15 @@ export const useStore = create<Store>((set, get) => ({
   sound: false,
   builder: false,
   engine: false,
-  lens: 'flow',
-  lensGo: null,
-  hover: null,
-  stepHover: null,
   drawn: null,
   dockChoice: null,
   tamper: null,
-  replayLens: 'flow',
-  replayGo: null,
   entering: null,
-  merchant: null,
-  lastMerchant: null,
-  boxing: null,
-  from: 'network',
   signatures: {},
   waves: [],
   catches: [],
   focus: null,
-  focusCity: (focus) => set({ focus, hover: null }),
+  focusCity: (focus) => set({ focus }),
   limitPreview: null,
   pageMode: 'human',
   awaiting: null,
@@ -128,36 +98,19 @@ export const useStore = create<Store>((set, get) => ({
   },
   set: (patch) => set(patch),
   open: (caseId) => {
-    const view = get().view;
-    const from = view === 'case' ? get().from : view;
-    const arrive = () => set({ view: 'case', from, selected: caseId, tamper: null, inspect: null, limitPreview: null, pageMode: 'human', replayLens: 'flow', replayGo: null, entering: null, boxing: null, hover: null });
-    // From the globe, the camera flies down into the merchant's city first; from a merchant's box,
-    // it dives into the box. A case that sits in another merchant's box is not in this one to dive towards.
-    const home = get().cases[caseId]?.purchase.merchant.name;
-    if (view === 'network') {
-      if (get().entering) return;
-      set({ entering: { caseId, at: performance.now() } });
-      setTimeout(arrive, DIVE_MS);
-      return;
-    }
-    if (view !== 'live' || (home && home !== get().merchant)) return arrive();
+    const arrive = () => set({ view: 'case', selected: caseId, tamper: null, inspect: null, limitPreview: null, pageMode: 'human', entering: null });
+    // From the globe, the camera first flies down into the merchant's city; from one case to another, straight there.
+    if (get().view !== 'network') return arrive();
     if (get().entering) return;
     set({ entering: { caseId, at: performance.now() } });
     setTimeout(arrive, DIVE_MS);
   },
-  // One level up: case to wherever it was opened from, box to the network.
+  // One level up: a city back to the whole globe, a case back to the globe.
   back: () => {
     if (get().view === 'network' && get().focus) return set({ focus: null });
-    const box = caseBox(get());
-    if (box) return set({ view: 'live', merchant: box, inspect: null, limitPreview: null, entering: null });
     get().toNetwork();
   },
-  enterBox: (merchant) => {
-    if (get().boxing) return;
-    set({ boxing: { merchant, at: performance.now() }, hover: null });
-    setTimeout(() => set({ view: 'live', merchant, boxing: null, lensGo: { to: 'flow', n: Date.now() } }), DIVE_MS);
-  },
-  toNetwork: () => set((s) => ({ view: 'network', lastMerchant: s.merchant, merchant: null, inspect: null, limitPreview: null, entering: null, boxing: null, hover: null })),
+  toNetwork: () => set({ view: 'network', inspect: null, limitPreview: null, entering: null }),
   setInspect: (inspect) => set({ inspect }),
   send: (msg) => socket?.readyState === WebSocket.OPEN && socket.send(JSON.stringify(msg)),
   setPaused: (paused) => {

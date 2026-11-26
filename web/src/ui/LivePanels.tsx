@@ -1,22 +1,13 @@
 import { useState } from 'react';
 import type { BoardRow, CaseFile, Signature } from '../../../shared/types';
 import { MERCHANTS } from '../../../shared/types';
-import { caseList, eur, useStore, type Lens } from '../store';
+import { caseList, eur, useStore } from '../store';
 import { CaseState } from './State';
-
-// The box reads differently from each side.
-const LENSES: { id: Lens; name: string; text: string }[] = [
-  { id: 'flow', name: 'Side', text: 'The path of a payment, left to right. Height is the order value.' },
-  { id: 'agents', name: 'Front', text: 'Each column is an agent provider. Each dot, a decided case.' },
-  { id: 'liability', name: 'Top', text: 'Agent providers against who was held liable.' },
-];
 
 function CaseRow({ c }: { c: CaseFile }) {
   const open = useStore((s) => s.open);
-  const hot = useStore((s) => s.hover === c.id);
-  const point = (id: string | null) => useStore.getState().set({ hover: id });
   return (
-    <button className={`case-row ${c.status} ${hot ? 'hot' : ''}`} onClick={() => open(c.id)} onMouseEnter={() => point(c.id)} onMouseLeave={() => point(null)} onFocus={() => point(c.id)} onBlur={() => point(null)}>
+    <button className={`case-row ${c.status}`} onClick={() => open(c.id)}>
       <div className="l1">
         <span className="item">{c.purchase.item}</span>
         <span className="amount">{eur(c.purchase.total)}</span>
@@ -91,25 +82,13 @@ export function LivePanels() {
   const cases = useStore((s) => s.cases);
   const stats = useStore((s) => s.stats);
   const view = useStore((s) => s.view);
-  const merchant = useStore((s) => (s.view === 'live' ? s.merchant : s.view === 'network' ? s.focus : null));
+  const merchant = useStore((s) => (s.view === 'network' ? s.focus : null));
   const focusCity = useStore((s) => s.focusCity);
   const list = caseList(cases).filter((c) => !merchant || c.purchase.merchant.name === merchant);
   const [tab, setTab] = useState<'cases' | 'network' | 'board'>('cases');
-  const lens = useStore((s) => s.lens);
-  const set = useStore((s) => s.set);
 
   return (
     <>
-      {view === 'live' && <div className="lens">
-        <div className="seg" role="tablist" aria-label="Which side of the box to look at">
-          {LENSES.map((l) => (
-            <button key={l.id} role="tab" aria-selected={lens === l.id} className={lens === l.id ? 'on' : ''} onClick={() => set({ lensGo: { to: l.id, n: Date.now() } })}>
-              {l.name}
-            </button>
-          ))}
-        </div>
-        <p>{LENSES.find((l) => l.id === lens)!.text}</p>
-      </div>}
 
       <aside className="cases">
         <header>

@@ -5,8 +5,7 @@ import { Engine } from './ui/Engine';
 import { LivePanels } from './ui/LivePanels';
 import { Builder } from './ui/Builder';
 import { TopBar } from './ui/TopBar';
-import { CaseScene } from './views/CaseScene';
-import { GateScene } from './views/Gate';
+import { CaseStage } from './ui/CaseStage';
 import { GlobeScene } from './views/Globe';
 
 // Without WebGL (graphics acceleration turned off, or the GPU blocked after a crash) a 3D scene cannot
@@ -36,8 +35,7 @@ export function App() {
   const connected = useStore((s) => s.connected);
   const builder = useStore((s) => s.builder);
   const engine = useStore((s) => s.engine);
-  const entering = useStore((s) => !!s.entering || !!s.boxing);
-  const merchant = useStore((s) => s.merchant);
+  const entering = useStore((s) => !!s.entering);
 
   useEffect(() => connect(), []);
   // The first seconds after loading: the scene alone, then the rest arrives.
@@ -61,9 +59,7 @@ export function App() {
       {inCase ? (
         <main className={`case-view ${dock ? 'dock-open' : ''}`} key={selected}>
           <div className="stage">
-            <SceneBoundary>
-              <CaseScene c={c!} />
-            </SceneBoundary>
+            <CaseStage c={c!} />
             <CaseInfo c={c!} />
             <Inspector c={c!} />
             {c!.status === 'awaiting_approval' ? <ApprovalBanner c={c!} /> : <ReplayLens />}
@@ -75,7 +71,9 @@ export function App() {
         </main>
       ) : (
         <>
-          <div className="stage live"><SceneBoundary>{view === 'network' ? <GlobeScene /> : <GateScene key={merchant ?? ''} />}</SceneBoundary></div>
+          <div className="stage live"><SceneBoundary>
+              <GlobeScene />
+            </SceneBoundary></div>
           <LivePanels />
         </>
       )}
