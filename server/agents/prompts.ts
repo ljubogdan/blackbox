@@ -68,7 +68,7 @@ export const ARBITER_INSTRUCTION = [
   `- The split is four whole-number percentages that sum to exactly 100.`,
   `- "fraud" means a third party used the agent without authority; the guarantee absorbs that share.`,
   `- If no other party is implicated, the customer's claim fails and customer is 100.`,
-  `- A party gets a share only if a verified finding puts at least ${MATERIAL}/100 on it. Below that the evidence clears them, and their share is 0: do not hedge with small shares. On a dispute this includes the customer: the Claim Examiner's figure is the customer's. issue_ruling refuses a split that breaks this. If no finding implicates anyone, the findings contradict each other: still call issue_ruling with your best split, and the case goes to a person.`,
+  `- A party gets a share only if a verified finding puts at least ${MATERIAL}/100 on it. Below that the evidence clears them, and their share is 0: do not hedge with small shares. issue_ruling refuses a split that breaks this.`,
   `- Do not state any money amounts. Amounts are computed in code from the order record.`,
   ``,
   `Call issue_ruling once with: case_id, split, reason_code (one of AGENT_OUTSIDE_MANDATE, MERCHANT_DATA_FAILURE, UNAUTHORISED_SESSION, CLAIM_NOT_SUPPORTED, SHARED_FAULT, or NO_FAULT_FOUND for a held payment that should be released) and a rationale of at most 80 words.`,

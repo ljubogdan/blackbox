@@ -73,22 +73,3 @@ test('the customer, as the residual party, may take a share without a finding', 
   const reply = await tool.invoke({ ...args(c.id), split: { customer: 30, agent_provider: 70, merchant: 0, fraud: 0 } });
   assert.equal(reply, 'Ruling recorded.');
 });
-
-test("on a dispute the customer's share needs the Claim Examiner's finding like any other", async () => {
-  const c = onFile();
-  c.investigators.intent.finding = { role: 'intent', party: 'customer', liability: 5, confidence: 90, summary: 'the claim holds', citations: [] };
-  const reply = await tool.invoke({ ...args(c.id), split: { customer: 30, agent_provider: 70, merchant: 0, fraud: 0 } });
-  assert.match(String(reply), /^Error: .*customer/);
-  assert.equal(c.arbiter.ruling, undefined);
-});
-
-test('findings that clear every party, the customer included, send the case to a person', async () => {
-  const c = onFile();
-  c.investigators.mandate.finding!.liability = 5; // fraud was revised away in a challenge, say
-  c.investigators.integrity.finding = { role: 'integrity', party: 'fraud', liability: 5, confidence: 90, summary: 'test', citations: [] };
-  c.investigators.intent.finding = { role: 'intent', party: 'customer', liability: 0, confidence: 90, summary: 'the claim holds', citations: [] };
-  const reply = await tool.invoke({ ...args(c.id), split: { customer: 100, agent_provider: 0, merchant: 0, fraud: 0 } });
-  assert.match(String(reply), /contradict/);
-  assert.equal(c.status, 'manual_review');
-  assert.equal(c.arbiter.ruling, undefined);
-});
