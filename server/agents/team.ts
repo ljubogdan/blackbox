@@ -49,6 +49,15 @@ const when = (pred: (ctx: SituationContext) => boolean): SituationSpecification 
 const payloadOf = <T>(ctx: SituationContext) => ctx.event.payload as T;
 const isOwn = (type: string) => when(({ event, participant }) => event.type === type && event.producerId === participant.getId());
 
+// A turn that ended because the model could not be reached says so in its last message. Put the
+// reason on the case file, so a case that stalls shows why instead of only "could not produce".
+function noteModelFailure(ctx: SituationContext, c: CaseFile, who: string) {
+  const text = payloadOf<{ answer?: { content?: { text?: string } } }>(ctx).answer?.content?.text ?? '';
+  if (!text.startsWith('INFERENCE_ERROR: ')) return;
+  note(c, who, `model call failed: ${text.slice('INFERENCE_ERROR: '.length, 220)}`);
+  pushCase(c);
+}
+
 const codeParticipant = (name: string, handlers: SituationHandler[]) =>
   createAgent({ name, capabilities: ['code'], instruction: 'Code-only participant. It never calls a model.', tools: [], handlers });
 
@@ -159,6 +168,7 @@ function createInvestigator(role: Role): Agent {
         const ended = loopEnded(payloadOf<{ loopId: string }>(ctx).loopId);
         const c = ended?.c;
         if (!c || c.closedAt) return;
+        noteModelFailure(ctx, c, name);
         const inv = c.investigators[role];
         const key = keyOf(c.id, name);
         if (state().challengeLoops.delete(key) && inv.challenge?.status === 'pending') {
@@ -307,6 +317,7 @@ function createArbiter(): Agent {
       apply(ctx) {
         const c = loopEnded(payloadOf<{ loopId: string }>(ctx).loopId)?.c;
         if (!c || c.closedAt) return;
+        noteModelFailure(ctx, c, 'Arbiter');
         if (c.arbiter.status === 'deliberating') deliberate(c, 'Your turn ended without a ruling. Call issue_ruling now.');
       },
     },

@@ -6,8 +6,12 @@ import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
 import type { CaseFile, Lane, ServerMsg, Stats } from '../shared/types';
 import { PARTIES, ROLES } from '../shared/types';
+import { config } from '../server/config';
 
-const want = Number(process.argv[2] ?? 8);
+// Never wait for more cases than the engine is allowed to open (MAX_CASES).
+const want = Math.min(Number(process.argv[2] ?? 8), config.maxCases);
+// A real model is slower, and a free-tier key is paced to a few calls a minute. PROOF_TIMEOUT_S overrides.
+const limitMs = Number(process.env.PROOF_TIMEOUT_S ?? (config.mode === 'live' ? 900 : 240)) * 1000;
 const port = 8799;
 const engine = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {
   env: { ...process.env, ENGINE_PORT: String(port), DISPUTE_EVERY_MS: process.env.DISPUTE_EVERY_MS ?? '1500', APPROVAL_THRESHOLD: '100000' },
@@ -62,6 +66,6 @@ function connect(tries = 0) {
 }
 connect();
 setTimeout(() => {
-  console.error('timed out');
+  console.error(`timed out after ${limitMs / 1000}s`);
   finish();
-}, 240_000);
+}, limitMs);

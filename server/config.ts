@@ -12,6 +12,10 @@ const DEFAULT_MODELS: Record<string, { investigator: string; arbiter: string }> 
   gemini: { investigator: 'gemini-3.5-flash', arbiter: 'gemini-3.5-flash' },
 };
 const models = provider ? DEFAULT_MODELS[provider] : { investigator: 'scripted', arbiter: 'scripted' };
+// Models to move to when the chosen one is out of quota or overloaded. Gemini's free tier counts
+// 20 requests a day per model, so its neighbours are worth having; paid providers need none.
+const DEFAULT_FALLBACKS: Record<string, string[]> = { gemini: ['gemini-3.5-flash-lite', 'gemini-3.8-flash'] };
+const list = (v: string | undefined) => (v !== undefined ? v.split(',').map((x) => x.trim()).filter(Boolean) : undefined);
 
 export const config = {
   port: num(env.ENGINE_PORT, 8787),
@@ -19,6 +23,7 @@ export const config = {
   mode: (live ? 'live' : 'scripted') as 'live' | 'scripted',
   investigatorModel: env.INVESTIGATOR_MODEL ?? models.investigator,
   arbiterModel: env.ARBITER_MODEL ?? models.arbiter,
+  fallbackModels: list(env.FALLBACK_MODELS) ?? (provider ? (DEFAULT_FALLBACKS[provider] ?? []) : []),
   // Scripted mode only: share of first submissions whose citation is deliberately
   // corrupted, so the verifier's rejection path is exercised and visible.
   faultRate: live ? 0 : num(env.FAULT_RATE, 0.15),
@@ -28,10 +33,11 @@ export const config = {
   maxAwaiting: num(env.MAX_AWAITING, 2),
   premiumBps: num(env.PREMIUM_BPS, 90),
   maxOpenCases: num(env.MAX_OPEN_CASES, live ? 2 : 4),
-  maxCases: num(env.MAX_CASES, live ? 12 : Infinity), // bounds model spend in live mode
+  // Live mode only: bounds model spend. The stand-in costs nothing, so a cap set for a real key does not apply to it.
+  maxCases: live ? num(env.MAX_CASES, 12) : Infinity,
   disputeEveryMs: num(env.DISPUTE_EVERY_MS, live ? 15000 : 6500),
   maxConcurrentInferences: num(env.MAX_CONCURRENT_INFERENCES, live ? 6 : 64),
-  // Provider requests-per-minute cap; calls are spaced to stay under it. 0 = no pacing.
-  maxRpm: num(env.MAX_RPM, 0),
+  // Live mode only: provider requests-per-minute cap; calls are spaced to stay under it. 0 = no pacing.
+  maxRpm: live ? num(env.MAX_RPM, 0) : 0,
   maxAttempts: 3,
 };

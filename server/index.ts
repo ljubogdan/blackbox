@@ -35,7 +35,7 @@ const inner =
   config.mode === 'live'
     ? new GeminiSignatures(new DefaultInferenceRunner(supportedModels, { validate() {} } as never), supportedModels)
     : new ScriptedRunner(config.seed, config.faultRate);
-const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, 90_000, config.maxRpm);
+const runner = new GuardedRunner(inner, config.maxConcurrentInferences, 14, 90_000, config.maxRpm, { fallbacks: config.fallbackModels });
 
 initializeRuntime({ state: new BlackboxState(), inferenceRunnerConfig: { runner } });
 const team = assembleTeam();

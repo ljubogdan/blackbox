@@ -113,6 +113,8 @@ In scripted mode, 15% of first submissions carry a deliberately wrong citation (
 
 **Live mode has run one case end to end**, on Gemini (`gemini-3.5-flash-lite` for every agent): a held payment that the team released, matching the ground truth, with 13 citations checked and none rejected. One case says the plumbing works; it says nothing yet about how often a real model rules correctly. Anthropic and OpenAI keys are untested.
 
+When a provider says no, the guarded runner ([server/model/guard.ts](server/model/guard.ts)) sorts the failure. A per-minute limit is waited out. A model that is out of quota for the day, or that stays overloaded, is rested and the request moves to the next model in `FALLBACK_MODELS` (for Gemini, `gemini-3.5-flash-lite` then `gemini-3.8-flash` by default). If no model can answer, the turn ends and the reason is written to the case's activity log. This has been seen working against the real API: a run that started on a model with no quota left finished its case on the next one.
+
 Gemini 3 models sign each function call and reject the next request unless the signature is sent back. Mozaik's Gemini mapper drops it, so [server/model/gemini.ts](server/model/gemini.ts) keeps the signatures and returns them.
 
 ## Synthetic data
