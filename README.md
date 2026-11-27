@@ -4,6 +4,8 @@
 
 **The guarantee for purchases made by AI agents.**
 
+**Live demo: [blackbox-tyku.onrender.com](https://blackbox-tyku.onrender.com)** (the scripted stand-in model, no key needed; on a free instance, so the first visit after a quiet spell takes about a minute to wake it)
+
 An AI shopping agent buys something. The customer says they never asked for it. Today nobody knows who pays: card networks have no dispute category for agent purchases, so the merchant usually absorbs the loss.
 
 Blackbox records every agent purchase and does two things with that record:
