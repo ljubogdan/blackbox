@@ -75,6 +75,128 @@ On the left: the owner's instruction, the customer's claim or why the payment wa
 - **Download the evidence pack** on a closed case: one HTML file with the outcome, every finding and its checked citations, and every sealed record.
 - **Sound** is off by default; the speaker button turns on short cues. The pause button stops the purchase stream.
 
+## Architecture
+
+### The system at a glance
+
+One Node process runs one Mozaik runtime. Every participant joins it and listens to the same stream of events; the browser watches that stream through the Bridge.
+
+```mermaid
+flowchart TB
+  subgraph web["Browser · React + three.js"]
+    direction LR
+    globe["Globe<br/>every merchant, every purchase"]
+    casev["Case view<br/>the charge taken apart"]
+    strip["Engine strip<br/>model calls as they run"]
+  end
+  officer(["Risk officer<br/>approves rulings of €1,000+"])
+
+  subgraph engine["Engine · Node · one Mozaik runtime"]
+    direction TB
+    bridge["Bridge<br/>streams events, measures concurrency"]
+    bus{{"Event stream<br/>purchase · dispute · finding · challenge · ruling · case"}}
+    state[("BlackboxState<br/>cases · sealed evidence · findings")]
+    subgraph door["Front door"]
+      direction TB
+      intake["Intake"]
+      sentinel["Sentinel<br/>plain rules, no model"]
+    end
+    subgraph team["Investigation team"]
+      direction TB
+      inv["Mandate Analyst · Session Forensics<br/>Listing Auditor · Claim Examiner"]
+      verifier["Verifier · Moderator"]
+      arbiter["Arbiter"]
+    end
+    subgraph office["Back office"]
+      direction TB
+      ledger["Ledger<br/>money in whole cents"]
+      network["Network<br/>attack signatures"]
+      payments["Payments<br/>with a Stripe key"]
+    end
+    bridge --- bus
+    bus -.- state
+    bus --- door
+    bus --- team
+    bus --- office
+  end
+
+  llm[["Model<br/>Claude · OpenAI · Gemini · local<br/>or the scripted stand-in"]]
+  stripe[["Stripe<br/>test mode"]]
+
+  web <==>|"WebSocket /ws"| bridge
+  officer --> casev
+  team <-->|"runLoop"| llm
+  payments <-->|"REST"| stripe
+
+  classDef code fill:#1e293b,stroke:#64748b,color:#e2e8f0
+  classDef model fill:#4c1d95,stroke:#a78bfa,color:#f5f3ff
+  classDef human fill:#78350f,stroke:#fbbf24,color:#fffbeb
+  classDef ext fill:#0c4a6e,stroke:#38bdf8,color:#f0f9ff
+  classDef hub fill:#134e4a,stroke:#2dd4bf,color:#f0fdfa
+  class intake,sentinel,verifier,ledger,network,payments,bridge code
+  class inv,arbiter model
+  class officer human
+  class llm,stripe,globe,casev,strip ext
+  class bus,state hub
+```
+
+<sub>Purple runs on a model, grey is plain code, amber is a person.</sub>
+
+### The life of a case
+
+A purchase enters at the top. A risky payment is held before settlement; a complaint after settlement opens a dispute. Both go through the same team.
+
+```mermaid
+flowchart TD
+  pending(["purchase.pending"]) --> sentinel{"Sentinel<br/>screens the payment"}
+  sentinel -->|"matches a learned attack"| netblock["Blocked on arrival<br/>stopped by the network"]
+  sentinel -->|"passes the screen"| settles["Settles"]
+  sentinel -->|"risky"| held(["purchase.held<br/>stopped for a few seconds"])
+  complaint(["dispute.opened<br/>the customer says they never asked"])
+
+  held --> ma & sf & la
+  complaint --> ma & sf & la & ce
+
+  ma["Mandate Analyst<br/>inside the instruction?"]
+  sf["Session Forensics<br/>the owner's own session?"]
+  la["Listing Auditor<br/>charged what was listed?"]
+  ce["Claim Examiner<br/>does the claim hold up?"]
+
+  ma & sf & la & ce --> verifier{"Verifier<br/>every citation matches<br/>its sealed record?"}
+  verifier -->|"no"| resubmit["finding.rejected<br/>the investigator resubmits"]
+  resubmit -.-> verifier
+  verifier -->|"yes, all verified"| moderator{"Moderator<br/>do findings blame<br/>different parties?"}
+  moderator -->|"yes"| cross["challenge.opened<br/>each answers the other"]
+  cross --> arbiter
+  moderator -->|"no"| arbiter["Arbiter<br/>issue_ruling: shares out of 100"]
+  arbiter -->|"dispute of €1,000+"| officer(["Risk officer"])
+  officer -->|"rejects"| manual["Manual review"]
+  officer -->|"approves"| ledger
+  arbiter -->|"ruling.issued"| ledger["Ledger"]
+
+  ledger -->|"hold, a share outside the customer"| blocked["Blocked"]
+  ledger -->|"hold, customer only"| released["Released"]
+  ledger -->|"dispute"| split["Liability split<br/>order total × share, whole cents"]
+
+  blocked & released & split --> closed(["case.closed"])
+  closed --> learn["Network learns a confirmed attack<br/>and shields every merchant"]
+  closed --> stripeop["Payments mirrors the outcome in Stripe"]
+  learn -.->|"next time"| sentinel
+
+  classDef event fill:#134e4a,stroke:#2dd4bf,color:#f0fdfa
+  classDef code fill:#1e293b,stroke:#64748b,color:#e2e8f0
+  classDef model fill:#4c1d95,stroke:#a78bfa,color:#f5f3ff
+  classDef human fill:#78350f,stroke:#fbbf24,color:#fffbeb
+  classDef good fill:#14532d,stroke:#4ade80,color:#f0fdf4
+  classDef bad fill:#7f1d1d,stroke:#f87171,color:#fef2f2
+  class pending,held,complaint,closed event
+  class sentinel,verifier,moderator,ledger,learn,stripeop,resubmit code
+  class ma,sf,la,ce,arbiter,cross model
+  class officer,manual human
+  class settles,released,split good
+  class netblock,blocked bad
+```
+
 ## The agents
 
 Thirteen participants share one Mozaik runtime, fourteen with a Stripe test key. Nobody calls anybody: each declares the situations it reacts to.
@@ -98,6 +220,60 @@ Thirteen participants share one Mozaik runtime, fourteen with a Stripe test key.
 
 ### How they run concurrently
 
+One dispute, end to end. Nobody calls anybody: every arrow is an event on the shared stream, and the shaded blocks run at the same time.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant I as Intake
+  participant MA as Mandate Analyst
+  participant SF as Session Forensics
+  participant LA as Listing Auditor
+  participant CE as Claim Examiner
+  participant V as Verifier
+  participant Mo as Moderator
+  participant A as Arbiter
+  actor H as Risk officer
+  participant L as Ledger
+
+  rect rgba(139, 92, 246, 0.12)
+  par one event, four loops
+    I-)MA: dispute.opened
+  and
+    I-)SF: dispute.opened
+  and
+    I-)LA: dispute.opened
+  and
+    I-)CE: dispute.opened
+  end
+  end
+
+  MA->>V: finding.submitted
+  V--)MA: finding.rejected (cited value ≠ record)
+  MA->>V: finding.submitted, corrected
+  SF->>V: finding.submitted
+  LA->>V: finding.submitted
+  CE->>V: finding.submitted
+  V-)Mo: finding.verified, all four
+
+  rect rgba(245, 158, 11, 0.12)
+  par cross-examination, both ways at once
+    Mo-)SF: challenge.opened (LA blames the merchant)
+    SF--)Mo: challenge.answered: maintains
+  and
+    Mo-)LA: challenge.opened (SF blames fraud)
+    LA--)Mo: challenge.answered: revises
+  end
+  end
+
+  Mo-)A: case.ready
+  A->>H: issue_ruling held mid-turn (order of €1,000+)
+  H-->>A: approved
+  A-)L: ruling.issued
+  Note over L: order total × share<br/>in whole cents
+  L-)L: case.closed
+```
+
 - **Parallel by construction.** All four investigators match `dispute.opened`, so one event starts four `runLoop`s at once. Several disputes are open at the same time, so loops from different cases overlap too. The strip at the bottom of the screen plots every model call as it happens; `npm run proof` recomputes the peak overlap from the raw intervals.
 - **Shared state.** Cases, evidence, findings and counters live on a `RuntimeState` subclass ([server/state.ts](server/state.ts)). Each (case, agent) pair gets its own `ModelContext`, so two live loops never write to the same one.
 - **Checks between agents.** The Verifier is plain code. A citation is `{ evidence_id, field, value }`; if the value does not match the record the finding is rejected, and the investigator is sent back to resubmit ([server/agents/verify.ts](server/agents/verify.ts)). A retry waits for that agent's previous turn to go idle first.
@@ -106,6 +282,38 @@ Thirteen participants share one Mozaik runtime, fourteen with a Stripe test key.
 - **Interception.** `issue_ruling` on an order at or above €1,000 is held mid-turn by an `InterceptionHandler` until a person approves it in the UI. Only that loop waits. A rejection rewrites the pending tool call so no ruling is recorded.
 
 ### Care with financial data
+
+Every record is sealed into a hash chain when its case opens: each hash is `sha256(previous hash | id | data)`. A finding counts only once each citation in it survives the Verifier's checks.
+
+```mermaid
+flowchart LR
+  subgraph chain["Sealed hash chain"]
+    direction LR
+    g(("GENESIS")) --> mnd["MND<br/>mandate"] --> ord["ORD<br/>order"] --> lst["LST<br/>listing"] --> ses["SES<br/>session"] --> trl["TRL · CLM · DLV<br/>steps, claim, delivery"]
+  end
+
+  finding["Finding<br/>citation = { evidence_id, field, value }"] --> c1{"Record exists<br/>in this case?"}
+  c1 -->|"yes"| c2{"Hash recomputes?<br/>not altered after sealing"}
+  c2 -->|"yes"| c3{"Field exists and<br/>value matches?"}
+  c3 -->|"yes"| c4{"Cited the records<br/>its question is about?"}
+  c4 -->|"yes"| ok["Verified<br/>counts toward the ruling"]
+  c1 -->|"no"| back["Rejected<br/>investigator resubmits"]
+  c2 -->|"no"| back
+  c3 -->|"no"| back
+  c4 -->|"no"| back
+  trl -.->|"looked up"| c1
+
+  classDef rec fill:#1e293b,stroke:#64748b,color:#e2e8f0
+  classDef check fill:#134e4a,stroke:#2dd4bf,color:#f0fdfa
+  classDef good fill:#14532d,stroke:#4ade80,color:#f0fdf4
+  classDef bad fill:#7f1d1d,stroke:#f87171,color:#fef2f2
+  classDef model fill:#4c1d95,stroke:#a78bfa,color:#f5f3ff
+  class g,mnd,ord,lst,ses,trl rec
+  class c1,c2,c3,c4 check
+  class ok good
+  class back bad
+  class finding model
+```
 
 - Every number an agent reports must be cited, and every citation is checked in code against the record it names.
 - A true value can still be beside the point, so each investigator must also cite the records its own question is about: the Mandate Analyst the mandate and the order, Session Forensics the session, the Listing Auditor the listing and the order, the Claim Examiner the mandate or the session. A finding that misses one is sent back like one with a wrong value ([server/agents/verify.ts](server/agents/verify.ts)).
@@ -126,6 +334,27 @@ Set `STRIPE_SECRET_KEY` to a Stripe **test** key (`sk_test_…`) in `.env`, and 
 | It is released | It is captured: the money moves to the merchant |
 | A customer disputes a purchase | The purchase is charged as it settled |
 | The dispute is ruled | The refund the Ledger computed is refunded, to the cent; a denied claim refunds nothing |
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  state "Held payment" as hold {
+    direction LR
+    [*] --> Authorised: purchase.pending, held
+    Authorised --> Captured: released
+    Authorised --> Cancelled: blocked, by the team or a known attack
+  }
+  state "Disputed purchase" as dispute {
+    direction LR
+    [*] --> Charged: dispute.opened
+    Charged --> Refunded: ruled, the Ledger's figure to the cent
+    Charged --> Kept: claim denied, nothing refunded
+  }
+  Captured --> [*]
+  Cancelled --> [*]
+  Refunded --> [*]
+  Kept --> [*]
+```
 
 Each case's activity shows the Stripe ids, and every payment is in the [test dashboard](https://dashboard.stripe.com/test/payments) with the case id in its metadata. A live key is refused at startup (`isTestKey` in [server/payments/stripe.ts](server/payments/stripe.ts)), so the engine cannot move real money. A Stripe error is written to the case's log and never changes the ruling. Without a key, nothing calls Stripe and everything else works the same.
 
