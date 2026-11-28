@@ -1575,9 +1575,10 @@ the replay has the screen */
   animation: fade 0.2s ease both;
 }
 .modal {
+  display: flex;
+  flex-direction: column;
   width: min(700px, calc(100vw - 32px));
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
+  max-height: calc(100dvh - 40px);
   padding: 26px;
   border-radius: 14px;
   background: var(--surface);
@@ -1609,6 +1610,20 @@ the replay has the screen */
 }
 .modal .x:hover {
   color: var(--text);
+}
+.modal header,
+.modal footer {
+  flex: none;
+}
+/* the steps scroll between a fixed header and footer, fading out under both */
+.modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 -26px;
+  padding: 0 26px 6px;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
 }
 .modal .step {
   margin-top: 22px;
@@ -2090,7 +2105,7 @@ where it would scroll away with their content) */
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 30%), var(--glass-strong);
 }
 .modal-back {
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.55);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -2461,15 +2476,13 @@ small pills thinnest */
     transform 0.45s var(--spring-soft),
     filter 0.45s var(--ease);
 }
+/* the step back is a transform only: a filter on the live 3D scene, under a blurred backdrop, makes it
+   repaint every frame and flicker. The scrim does the dimming. */
 .app:has(.modal-back) > .stage,
 .app:has(.modal-back) > .case-view,
 .app:has(.modal-back) > .cases,
 .app:has(.modal-back) > .engine {
   transform: scale(0.97);
-  filter: brightness(0.6) saturate(0.8);
-}
-.app:has(.modal-back) > .topbar {
-  filter: brightness(0.6);
 }
 .modal {
   animation: sheet 0.5s var(--spring-soft) both;
@@ -2878,4 +2891,258 @@ with what each comes to */
 
 .case-stage .journey {
   align-self: flex-start;
+}
+
+/* ═════════════════════════ phones ═════════════════════════ */
+
+.sheet-close {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --top: 60px;
+    --sheet: min(68dvh, 560px); /* how tall the evidence and the team's cards stand */
+  }
+
+  /* top bar: the mark, one figure, and the controls */
+  .topbar {
+    inset: 8px 8px auto 8px;
+    padding: 0 6px 0 10px;
+    gap: 8px;
+  }
+  .brand span,
+  .metric:nth-child(n + 2),
+  .controls .sep {
+    display: none;
+  }
+  .metric {
+    padding: 0 10px;
+  }
+  .metric b {
+    font-size: 14px;
+  }
+  /* rulings waiting for a person matter more than the running total */
+  .topbar:has(.btn.wait) .metrics {
+    display: none;
+  }
+  .topbar:has(.btn.wait) .controls {
+    margin-left: auto;
+    border-left: 0;
+  }
+  .controls {
+    gap: 4px;
+    padding-left: 8px;
+  }
+  .controls .btn {
+    padding: 0 12px;
+  }
+
+  /* the network: the globe above, the cases below it */
+  /* the globe runs under the glass top bar and a little under the list, so it centres in the gap between them */
+  .stage.live {
+    bottom: auto;
+    height: 50dvh;
+  }
+  .cases {
+    top: 44dvh;
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+  .app.opening .cases {
+    animation-name: fade;
+  }
+  .engine {
+    inset: auto 8px 8px 8px;
+  }
+  .engine .lanes {
+    grid-template-columns: 96px minmax(0, 1fr);
+    column-gap: 8px;
+  }
+  /* the strip keeps its disclaimer whole, on two short lines, and drops the model's name */
+  .engine .notice {
+    white-space: normal;
+    font-size: 10.5px;
+    line-height: 1.25;
+  }
+  .engine-toggle {
+    flex: none;
+    gap: 8px;
+  }
+  .engine-toggle .live {
+    display: none;
+  }
+  .no-3d {
+    padding: 0 24px;
+  }
+
+  /* a case: one column that scrolls, the charge first */
+  .case-view .stage {
+    inset: var(--top) 0 var(--bottom) 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 12px 8px 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .case-stage {
+    position: static;
+    order: 1;
+    gap: 22px;
+    margin: 0;
+    padding: 4px 6px 0;
+    max-width: none;
+  }
+  .case-stage .total {
+    font-size: 44px;
+  }
+  .case-stage .journey {
+    align-self: stretch;
+    flex-wrap: wrap;
+  }
+  .replay-lens,
+  .approval-banner {
+    order: 2;
+  }
+  .case-info {
+    order: 3;
+    position: static;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .replay-lens {
+    position: sticky;
+    bottom: 0;
+    left: auto;
+    right: auto;
+    z-index: 25;
+  }
+  .replay-lens .dock-toggle {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  }
+  .approval-banner {
+    position: static;
+    flex-wrap: wrap;
+    width: auto;
+    max-width: none;
+    transform: none;
+    animation-name: fade;
+  }
+  .approval-banner .what {
+    flex: 1 1 100%;
+  }
+  .approval-banner .btn {
+    flex: 1;
+  }
+
+  /* the open record and the team's cards rise as sheets over the case */
+  .inspector,
+  .inspector:not(.open) {
+    display: none;
+  }
+  .inspector.open {
+    display: block;
+    position: fixed;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--bottom) + 4px);
+    width: auto;
+    max-height: var(--sheet);
+    z-index: 40;
+    animation: sheet 0.45s var(--spring-soft) both;
+  }
+  .sheet-close {
+    display: block;
+    position: sticky;
+    top: 0;
+    float: right;
+    margin: -6px -4px 0 8px;
+    z-index: 2;
+  }
+  /* over a case they hold text, so the glass is nearly solid */
+  .inspector.open,
+  .dock {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 30%), rgba(20, 20, 24, 0.95);
+  }
+  .dock {
+    display: block;
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--bottom) + 4px);
+    height: var(--sheet);
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    z-index: 30;
+  }
+  /* a sheet that scrolls has no rim: it would stick out a pixel and scroll sideways */
+  .dock::before {
+    display: none;
+  }
+  .dock.closed {
+    height: var(--sheet);
+  }
+  /* the four investigators and the verdict, one under another */
+  .inv-row {
+    display: block;
+    overflow: visible;
+  }
+  .inv,
+  .verdict {
+    min-height: auto;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .settlement .line {
+    flex-wrap: wrap;
+  }
+  .settlement .lbl {
+    flex: 1 1 100%;
+    white-space: normal;
+  }
+  /* with the team up, its toggle rides on the sheet's top edge */
+  .case-view.dock-open .replay-lens {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--bottom) + var(--sheet) + 12px);
+  }
+
+  /* the simulator fills the screen's width, its choices one to a row */
+  .modal {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 20px 16px 16px;
+    border-radius: 22px;
+  }
+  .modal-body {
+    margin: 0 -16px;
+    padding: 0 16px 6px;
+  }
+  .modal h2 {
+    font-size: 22px;
+  }
+  .errand select {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+  .options,
+  .toggle {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .modal footer {
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .modal footer .btn {
+    flex: none;
+    padding: 0 18px;
+  }
 }

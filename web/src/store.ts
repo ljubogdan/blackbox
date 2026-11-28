@@ -157,7 +157,9 @@ export const reducedMotion = () => typeof matchMedia === 'function' && matchMedi
 
 // The team's cards float over the bottom of the replay. They wait until the journey has been drawn,
 // so the replay has the screen to itself first; once the person opens or closes them, that stands.
-export const dockOpen = (s: Store) => s.dockChoice ?? (!canDraw3D || (s.drawn !== null && s.drawn === s.selected));
+// On a phone the team's cards are a sheet over the whole case, so they wait to be asked for.
+const narrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches;
+export const dockOpen = (s: Store) => s.dockChoice ?? (!narrow && (!canDraw3D || (s.drawn !== null && s.drawn === s.selected)));
 export const DOCK_H = 268;
 
 export const nonce = () => Math.random().toString(36).slice(2, 10);

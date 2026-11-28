@@ -460,7 +460,7 @@ tests/             node:test suites, run with npm test
 - The live eval has run on Claude only: Haiku 4.5 three times per kind, Sonnet 4.6 once. Gemini's free tier allows 20 requests a day per model, and a case takes 10 to 15, so a free key runs about one case per model per day; a rehearsal of the whole demo needs a paid key. `MAX_RPM` paces calls for low quotas, and `INVESTIGATOR_MODEL` / `ARBITER_MODEL` pick the models.
 - Mozaik's loop runs only the first tool call of a model response. When a model asks for several at once, the guarded runner ([server/model/guard.ts](server/model/guard.ts)) hands the rest to the loop one at a time, so each is run, intercepted and recorded without another model call. This is covered by a test against Mozaik's loop with a scripted model, but not yet by a real provider: the scripted stand-in only ever returns one call per inference.
 - Nothing is persisted: restarting the engine starts a new run.
-- The UI is built for desktop widths (about 1,300 px and up is best).
+- The UI is built for desktop widths first (about 1,300 px and up is best). Phones get their own layout: the globe above the case list, a case as one scrolling column, and the evidence and the team as sheets. It has been checked in a phone-sized browser, not on a real device.
 
 ## License
 

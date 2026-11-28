@@ -237,6 +237,12 @@ export function Inspector({ c }: { c: CaseFile }) {
   const groups = ['MND', 'TRL', 'LST', 'ORD', 'SES', 'DLV', 'CLM'] as const;
   return (
     <aside className={`inspector ${rec ? 'open' : ''}`}>
+      {/* only shown on a phone, where the open record is a sheet over the case */}
+      {rec && (
+        <button className="x sheet-close" onClick={() => setInspect(null)} aria-label="Close the record">
+          ×
+        </button>
+      )}
       <h3>Evidence on file</h3>
       <div className="chips">
         {groups.map((g) =>

@@ -44,47 +44,50 @@ export function Builder() {
           </button>
         </header>
 
-        <div className="step">
-          <label>1. The purchase</label>
-          <div className="errand">
-            <select value={item} onChange={(e) => pick(Number(e.target.value))}>
-              {CATALOG_TITLES.map((t, i) => (
-                <option key={t} value={i}>
-                  {t} (about {eur(CATALOG_PRICES[i], 0)})
-                </option>
-              ))}
-            </select>
-            <span>spend no more than</span>
-            <div className="money">
-              €
-              <input type="number" min={10} max={5000} step={10} value={max} onChange={(e) => setMax(Number(e.target.value))} />
+        {/* only the middle scrolls: the rim drawn round the sheet would make the sheet itself overflow */}
+        <div className="modal-body">
+          <div className="step">
+            <label>1. The purchase</label>
+            <div className="errand">
+              <select value={item} onChange={(e) => pick(Number(e.target.value))}>
+                {CATALOG_TITLES.map((t, i) => (
+                  <option key={t} value={i}>
+                    {t} (about {eur(CATALOG_PRICES[i], 0)})
+                  </option>
+                ))}
+              </select>
+              <span>spend no more than</span>
+              <div className="money">
+                €
+                <input type="number" min={10} max={5000} step={10} value={max} onChange={(e) => setMax(Number(e.target.value))} />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="step">
-          <label>2. What goes wrong</label>
-          <div className="options">
-            {SABOTAGE.map((o) => (
-              <button key={o.id} className={sabotage === o.id ? 'on' : ''} onClick={() => setSabotage(o.id)}>
-                <b>{o.title}</b>
-                <span>{o.text}</span>
-              </button>
-            ))}
+          <div className="step">
+            <label>2. What goes wrong</label>
+            <div className="options">
+              {SABOTAGE.map((o) => (
+                <button key={o.id} className={sabotage === o.id ? 'on' : ''} onClick={() => setSabotage(o.id)}>
+                  <b>{o.title}</b>
+                  <span>{o.text}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="step">
-          <label>3. When Blackbox gets involved</label>
-          <div className="toggle">
-            <button className={stage === 'hold' ? 'on' : ''} onClick={() => setStage('hold')}>
-              <b>Before the money moves</b>
-              <span>The payment is screened and can be stopped inside the box.</span>
-            </button>
-            <button className={stage === 'dispute' ? 'on' : ''} onClick={() => setStage('dispute')}>
-              <b>After the customer complains</b>
-              <span>The payment settled. Now someone has to pay for it.</span>
-            </button>
+          <div className="step">
+            <label>3. When Blackbox gets involved</label>
+            <div className="toggle">
+              <button className={stage === 'hold' ? 'on' : ''} onClick={() => setStage('hold')}>
+                <b>Before the money moves</b>
+                <span>The payment is screened and can be stopped inside the box.</span>
+              </button>
+              <button className={stage === 'dispute' ? 'on' : ''} onClick={() => setStage('dispute')}>
+                <b>After the customer complains</b>
+                <span>The payment settled. Now someone has to pay for it.</span>
+              </button>
+            </div>
           </div>
         </div>
 
